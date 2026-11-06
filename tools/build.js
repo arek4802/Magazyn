@@ -5,9 +5,10 @@ const path = require('path');
 const kat = path.join(__dirname, '..');
 const czytaj = (p) => fs.readFileSync(path.join(kat, p), 'utf8');
 const bezpieczny = (js) => js.replace(/<\/script/gi, '<\\/script');
-const logo = 'data:image/png;base64,' + fs.readFileSync(path.join(kat, 'assets/logo-maasck.png')).toString('base64');
+const obraz = (p) => 'data:image/png;base64,' + fs.readFileSync(path.join(kat, 'assets', p)).toString('base64');
+const logo = { jasne: obraz('logo-jasne.png'), ciemne: obraz('logo-ciemne.png') };
 const pakiet = JSON.parse(czytaj('package.json'));
-const skrypty = ['vendor/qrcode.js', 'src/core.js', 'src/xlsx.js', 'src/storage.js', 'src/demo.js', 'src/app.js'];
+const skrypty = ['vendor/qrcode.js', 'src/core.js', 'src/xlsx.js', 'src/storage.js', 'src/demo.js', 'src/pomoc.js', 'src/app.js'];
 const html = `<!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -15,7 +16,9 @@ const html = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Magazyn · MAASCK</title>
 <meta name="generator" content="Magazyn ${pakiet.version}">
-<link rel="icon" href="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#16160f"/><circle cx="23" cy="23" r="4" fill="#ffc400"/><path d="M7 22V11h3l3 5 3-5h3v11" stroke="#fff" stroke-width="2.6" fill="none" stroke-linejoin="round"/></svg>')}">
+<link rel="icon" type="image/png" href="${obraz('ikona-64.png')}">
+<link rel="apple-touch-icon" href="${obraz('ikona-180.png')}">
+<meta name="theme-color" content="#08075c">
 <style>
 ${czytaj('src/styles.css')}
 </style>

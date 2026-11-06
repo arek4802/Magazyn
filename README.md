@@ -24,6 +24,8 @@ Przy kolejnym uruchomieniu wystarczy przycisk „Połącz ponownie”. Przycisk 
 | **WZZ** – wydanie zastępcze | sprzęt kupiony pod inny projekt; czerwone ostrzeżenie, obowiązkowy powód, ramka na wydruku, wpis na listę „Do uzupełnienia” |
 | **ZW** – zwrot | nadwyżki i niewykorzystany sprzęt z budowy |
 
+W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dymek po najechaniu), przycisk **Pomoc** z pełną instrukcją oraz klawisz **F1**. Do każdego modelu można dodać **kartę katalogową**: link do strony producenta albo plik PDF zapisany w folderze `karty/`. Kartę otwierasz potem jednym kliknięciem z kartoteki, stanu magazynu i dokumentów.
+
 Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z akcją „Przenieś”, urządzenia z historią po numerze seryjnym, raporty, kartoteka modeli, klienci, dziennik zmian, kontrola spójności i eksport każdej listy do Excela. Każdy dokument zapisuje się po potwierdzeniu PIN-em i drukuje jako formularz do podpisu z nagłówkiem firmy i kodem QR.
 
 ## Zasady przechowywania danych
@@ -40,6 +42,7 @@ Magazyn AV/
 ├── dokumenty/2026/     BO, PZ, WZ, WZZ, ZW – jeden plik na dokument
 ├── zdarzenia/2026-11/  kartoteka, klienci, użytkownicy, przeniesienia, anulowania, skany
 ├── podpisane/2026/     skany podpisanych formularzy
+├── karty/              karty katalogowe (PDF) dołączone do modeli
 ├── eksporty/           kopie eksportów do Excela
 └── kopie/              kopie tygodniowe
 ```
@@ -62,4 +65,6 @@ python3 test/e2e.py   # test w przeglądarce (Playwright + Chrome)
 - `src/storage.js`: zapis do folderu (File System Access API) i do pamięci (tryb demo).
 - `src/xlsx.js`: eksport do Excela bez bibliotek.
 - `src/app.js` i `src/styles.css`: interfejs.
+- `src/pomoc.js`: teksty dymków i instrukcji.
+- `assets/`: logo i ikona (kolory marki: granat #020195, żółty #f8c032).
 - `vendor/qrcode.js`: generator kodów QR (Kazuhiko Arase, licencja MIT).

@@ -80,10 +80,19 @@ with sync_playwright() as pw:
       p.go_back()
       p.wait_for_selector('h1:has-text("Stan magazynu")')
       p.click('nav a[data-w=pulpit]')
-      for i, w in enumerate(['stan', 'lokalizacje', 'urzadzenia', 'dokumenty', 'uzupelnienia', 'raporty', 'kartoteka', 'klienci', 'dziennik', 'problemy', 'ustawienia']):
+      for i, w in enumerate(['stan', 'lokalizacje', 'urzadzenia', 'dokumenty', 'uzupelnienia', 'raporty', 'kartoteka', 'klienci', 'dziennik', 'problemy', 'ustawienia', 'pomoc']):
           p.click(f'nav a[data-w={w}]')
           p.wait_for_timeout(150)
           p.screenshot(path=ZRZUTY / f'02-{i:02d}-{w}.png', full_page=False)
+      # dymek pomocy po najechaniu na znak zapytania
+      p.click('nav a[data-w=stan]')
+      p.hover('h1 .pomoc')
+      p.wait_for_selector('.dymek.widoczny')
+      p.screenshot(path=ZRZUTY / '05-dymek.png')
+      p.mouse.move(5, 5)
+      # F1 otwiera instrukcję
+      p.keyboard.press('F1')
+      p.wait_for_selector('.spis')
       # problemy w danych demo powinny być puste
       p.click('nav a[data-w=problemy]')
       assert p.locator('.alert.ok').count() == 1, 'dane demo mają uwagi spójności: ' + p.inner_text('.zawartosc')
@@ -109,7 +118,7 @@ with sync_playwright() as pw:
       # ---------------------------------------------------------- prawdziwy zapis (OPFS)
       ctx, p = nowa_strona(b)
       p.goto(URL + '?opfs=1')
-      p.wait_for_selector('text=To nowy folder')
+      p.wait_for_selector('text=To nowy, pusty folder')
       p.click('text=Dodaj użytkownika')
       p.fill('#modal input[name=imie]', 'Arek')
       p.fill('#modal input[name=nazwisko]', 'Testowy')
@@ -125,6 +134,8 @@ with sync_playwright() as pw:
       p.fill('#modal input[name=producent]', 'LG')
       p.fill('#modal input[name=model]', '55UH5N')
       p.fill('#modal input[name=pn]', '55UH5N-E')
+      p.fill('#modal input[name=link]', 'www.lg.com/karta-55uh5n.pdf')
+      p.screenshot(path=ZRZUTY / '09-nowy-model.png')
       okno_przycisk(p, 'Zapisz model')
       p.wait_for_timeout(100)
       # pierwsza (pusta) pozycja dodana na starcie BO – usuń ją, jeśli jest pusta
@@ -235,6 +246,13 @@ with sync_playwright() as pw:
       p.screenshot(path=ZRZUTY / '14-pulpit-po-odczycie.png')
       p.click('nav a[data-w=problemy]')
       assert p.locator('.alert.ok').count() == 1, p.inner_text('.zawartosc')
+      p.click('nav a[data-w=kartoteka]')
+      assert p.locator('.karta-btn.z-tekstem').count() == 1, 'brak przycisku karty katalogowej'
+      ctx.route('https://www.lg.com/**', lambda r: r.fulfill(body='karta', content_type='text/plain'))
+      with p.expect_popup() as okno:
+          p.locator('.karta-btn.z-tekstem').click()
+      assert okno.value.url.startswith('https://www.lg.com/'), okno.value.url
+      okno.value.close()
       p.click('nav a[data-w=dziennik]')
       p.screenshot(path=ZRZUTY / '15-dziennik.png')
       with p.expect_download() as dl:

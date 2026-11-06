@@ -155,6 +155,11 @@
     return m ? (m.producent ? m.producent + ' ' : '') + m.model : 'nieznany model (' + modelId + ')';
   }
 
+  function jm(st, modelId) {
+    const m = st.modele.get(modelId);
+    return m && m.jednostka === 'm' ? 'm' : 'szt.';
+  }
+
   function sortujZdarzenia(lista) {
     return lista.slice().sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
@@ -319,7 +324,7 @@
           const jest = st.partie.get(k) || 0;
           const ile = zaokr(p.ilosc);
           if (jest + 1e-9 < ile) {
-            problem(st, 'ILOSC', d.numer + ': ' + opisModelu(st, p.modelId) + ' – brak ' + ile + ' w lokalizacji ' + norm(p.lok) + (p.projektZakupu ? ' (pod projekt ' + p.projektZakupu + ')' : '') + ', jest ' + jest, ev.id);
+            problem(st, 'ILOSC', d.numer + ': ' + opisModelu(st, p.modelId) + ' – brak ' + ile + ' ' + jm(st, p.modelId) + ' w lokalizacji ' + norm(p.lok) + (p.projektZakupu ? ' (pod projekt ' + p.projektZakupu + ')' : '') + ', jest ' + jest + ' ' + jm(st, p.modelId), ev.id);
           }
           st.partie.set(k, zaokr(jest - ile));
           const kw = kluczWydania(d.projekt, p.modelId);
@@ -352,7 +357,7 @@
           const kw = kluczWydania(d.projekt, p.modelId);
           const wyd = st.wydane.get(kw) || 0;
           const ile = zaokr(p.ilosc);
-          if (wyd + 1e-9 < ile) problem(st, 'ILOSC', d.numer + ': zwrot ' + ile + ' ' + opisModelu(st, p.modelId) + ' większy niż wydano na projekt ' + d.projekt + ' (' + wyd + ')', ev.id);
+          if (wyd + 1e-9 < ile) problem(st, 'ILOSC', d.numer + ': zwrot ' + ile + ' ' + jm(st, p.modelId) + ' ' + opisModelu(st, p.modelId) + ' to więcej, niż wydano na projekt ' + d.projekt + ' (' + wyd + ' ' + jm(st, p.modelId) + ')', ev.id);
           st.wydane.set(kw, zaokr(wyd - ile));
           const k = kluczPartii(p.modelId, p.lok, '');
           st.partie.set(k, zaokr((st.partie.get(k) || 0) + ile));
@@ -370,13 +375,13 @@
         problem(st, 'SN', 'Przeniesienie: ' + opisModelu(st, d.modelId) + ' SN ' + d.sn + ' nie jest na stanie', ev.id);
         return;
       }
-      e.historia.push({ ts: ev.ts, rodzaj: 'PRZENIES', opis: 'Przeniesiono z ' + e.lok + ' na ' + norm(d.do) });
+      e.historia.push({ ts: ev.ts, rodzaj: 'PRZENIES', opis: 'Przeniesiono z „' + e.lok + '” do „' + norm(d.do) + '”' });
       e.lok = norm(d.do);
     } else {
       const kz = kluczPartii(d.modelId, d.z, d.projekt);
       const jest = st.partie.get(kz) || 0;
       const ile = zaokr(d.ilosc);
-      if (jest + 1e-9 < ile) problem(st, 'ILOSC', 'Przeniesienie: brak ' + ile + ' ' + opisModelu(st, d.modelId) + ' w ' + d.z + ', jest ' + jest, ev.id);
+      if (jest + 1e-9 < ile) problem(st, 'ILOSC', 'Przeniesienie: brak ' + ile + ' ' + jm(st, d.modelId) + ' ' + opisModelu(st, d.modelId) + ' w lokalizacji ' + d.z + ', jest ' + jest + ' ' + jm(st, d.modelId), ev.id);
       st.partie.set(kz, zaokr(jest - ile));
       const kd = kluczPartii(d.modelId, d.do, d.projekt);
       st.partie.set(kd, zaokr((st.partie.get(kd) || 0) + ile));
@@ -587,10 +592,10 @@
     switch (ev.typ) {
       case 'DOK': return (RODZAJE[d.rodzaj] || {}).nazwa + ' ' + d.numer + (d.projekt ? ' · projekt ' + d.projekt : '') + ' · ' + (d.pozycje || []).length + ' poz.';
       case 'ANUL': return 'Anulowano ' + (d.numer || '') + ' · powód: ' + (d.powod || '');
-      case 'PRZENIES': return 'Przeniesiono ' + opisModelu(st, d.modelId) + (d.sn ? ' SN ' + d.sn : ' ' + d.ilosc) + ' z ' + d.z + ' na ' + d.do;
+      case 'PRZENIES': return 'Przeniesiono ' + opisModelu(st, d.modelId) + (d.sn ? ' SN ' + d.sn : ' · ' + d.ilosc + ' ' + jm(st, d.modelId)) + ' z „' + d.z + '” do „' + d.do + '”';
       case 'SKAN': return 'Dołączono skan do ' + (d.numer || '') + ': ' + d.plik;
       case 'UZUP': return 'Oznaczono jako uzupełnione: ' + (d.numer || '') + ' poz. ' + (Number(d.idx) + 1) + (d.uwagi ? ' · ' + d.uwagi : '');
-      case 'MODEL': return 'Kartoteka: ' + (d.producent ? d.producent + ' ' : '') + (d.model || opisModelu(st, d.modelId));
+      case 'MODEL': return 'Kartoteka: ' + (d.producent ? d.producent + ' ' : '') + (d.model || opisModelu(st, d.modelId)) + (d.kartaPlik || d.link ? ' (z kartą katalogową)' : '');
       case 'KLIENT': return 'Klient: ' + (d.nazwa || d.klientId);
       case 'UZYTK': return 'Użytkownik: ' + (d.imie || '') + ' ' + (d.nazwisko || '') + (d.aktywny === false ? ' (dezaktywowany)' : '');
       default: return ev.typ;

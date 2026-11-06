@@ -30,8 +30,8 @@
     const modele = [
       { modelId: 'm-qm55', kategoria: 'Wyświetlacze', producent: 'Samsung', model: 'QM55C', pn: 'LH55QMCEBGCXEN', seryjny: true, jednostka: 'szt', stanMin: 1, status: 'aktywny' },
       { modelId: 'm-qm75', kategoria: 'Wyświetlacze', producent: 'Samsung', model: 'QM75B', pn: 'LH75QMBEBGCXEN', seryjny: true, jednostka: 'szt', stanMin: 0, status: 'EOL' },
-      { modelId: 'm-mxa', kategoria: 'Mikrofony', producent: 'Shure', model: 'MXA920', pn: 'MXA920W-S', seryjny: true, jednostka: 'szt', stanMin: 0, status: 'aktywny' },
-      { modelId: 'm-tesira', kategoria: 'DSP i sterowanie', producent: 'Biamp', model: 'TesiraFORTÉ X 400', pn: '911.0400.900', seryjny: true, jednostka: 'szt', stanMin: 1, status: 'aktywny' },
+      { modelId: 'm-mxa', kategoria: 'Mikrofony', producent: 'Shure', model: 'MXA920', pn: 'MXA920W-S', seryjny: true, jednostka: 'szt', stanMin: 0, status: 'aktywny', link: 'https://www.shure.com/' },
+      { modelId: 'm-tesira', kategoria: 'DSP i sterowanie', producent: 'Biamp', model: 'TesiraFORTÉ X 400', pn: '911.0400.900', seryjny: true, jednostka: 'szt', stanMin: 1, status: 'aktywny', link: 'https://www.biamp.com/' },
       { modelId: 'm-a40', kategoria: 'Wideokonferencje', producent: 'Yealink', model: 'MeetingBar A40', pn: 'A40-020', seryjny: true, jednostka: 'szt', stanMin: 1, status: 'aktywny' },
       { modelId: 'm-cat6', kategoria: 'Okablowanie', producent: 'Belden', model: 'Kabel Cat6 U/UTP LSZH', pn: '7965ELS', seryjny: false, jednostka: 'm', jednostkaZakupu: 'szpula', przelicznik: 305, stanMin: 305, status: 'aktywny' },
       { modelId: 'm-hdmi3', kategoria: 'Okablowanie', producent: 'Kramer', model: 'Kabel HDMI 2.1 3 m', pn: 'C-HM/HM/A-3', seryjny: false, jednostka: 'szt', stanMin: 10, status: 'aktywny' },
