@@ -80,6 +80,21 @@
     if (m.jednostkaZakupu && Number(m.przelicznik) > 0 && Math.abs(x) >= Number(m.przelicznik)) s += '<small class="przelicz">≈ ' + fmtL(Math.round((x / m.przelicznik) * 10) / 10) + ' × ' + esc(m.jednostkaZakupu) + '</small>';
     return s;
   };
+  /** Nazwa projektu (z rejestru albo z dokumentów). */
+  const projNazwa = (numer) => C.nazwaProjektu(app.st, numer);
+  const projTekst = (numer) => C.opisProjektu(app.st, numer);
+  /** Numer projektu z nazwą pod spodem – do tabel. */
+  const projHtml = (numer) => {
+    if (!C.norm(numer)) return '';
+    const n = projNazwa(numer);
+    return '<span class="proj"><span class="nowrap">' + esc(numer) + '</span>' + (n ? '<small>' + esc(n) + '</small>' : '') + '</span>';
+  };
+  /** Znaczek projektu z nazwą obok. */
+  const znaczekProj = (numer, klasa) => {
+    if (!C.norm(numer)) return '';
+    const n = projNazwa(numer);
+    return '<span class="znaczek ' + (klasa || 'projekt') + '">' + esc(numer) + '</span>' + (n ? ' <small class="nazwa-proj">' + esc(n) + '</small>' : '');
+  };
   const osoba = (userId) => {
     const u = app.st.uzytkownicy.get(userId);
     return u ? u.imie + ' ' + u.nazwisko : userId || '';
@@ -136,6 +151,10 @@
     karta: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h2.5a1.5 1.5 0 0 1 0 3H9v-5"/>',
     pomoc: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/>',
     link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+    proj: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+    dost: '<path d="M2 6h12v10H2z"/><path d="M14 9h4l3 3.5V16h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+    dol: '<path d="M6 9l6 6 6-6"/>',
+    pobierz: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   };
   const ikona = (n, kl) => '<svg class="ik ' + (kl || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IK[n] || '') + '</svg>';
 
@@ -168,7 +187,7 @@
 
   async function utworzZdarzenie(typ, dane) {
     const ev = C.noweZdarzenie(app.st, typ, app.user.userId, dane);
-    const problemy = typ === 'MODEL' || typ === 'KLIENT' || typ === 'UZYTK' ? [] : C.sprawdzNowe(app.zdarzenia, ev);
+    const problemy = ['MODEL', 'KLIENT', 'UZYTK', 'PROJEKT', 'DOSTAWCA'].includes(typ) ? [] : C.sprawdzNowe(app.zdarzenia, ev);
     if (problemy.length) throw new BladUzytkownika(problemy);
     return zapiszZdarzenie(ev);
   }
@@ -210,7 +229,7 @@
 
   let otwartyDialog = null;
 
-  function dialog({ tytul, tresc, przyciski, szeroki, przyOtwarciu, przyWyslaniu }) {
+  function dialog({ tytul, tresc, przyciski, szeroki, przyOtwarciu, przyWyslaniu, fokus }) {
     return new Promise((ok) => {
       const m = $('#modal');
       m.innerHTML = '<div class="tlo-modal"><form class="okno ' + (szeroki ? 'szerokie' : '') + '" novalidate>' +
@@ -221,6 +240,7 @@
         '</form></div>';
       const form = $('form', m);
       const zamknij = (w) => {
+        if (wyb.pole && m.contains(wyb.pole)) zamknijListe();
         m.innerHTML = '';
         otwartyDialog = null;
         ok(w);
@@ -251,8 +271,9 @@
         obsluz(b || (przyciski || []).find((p) => p.submit)?.wartosc || 'ok');
       });
       if (przyOtwarciu) przyOtwarciu(form);
-      const pierwszy = $('input:not([type=hidden]):not([readonly]), select, textarea', form);
-      if (pierwszy) setTimeout(() => pierwszy.focus(), 30);
+      const pierwszy = (fokus && $('[name="' + fokus + '"]', form)) || $('input:not([type=hidden]):not([readonly]), select, textarea', form);
+      // nie zabieraj kursora, jeśli ktoś już zaczął pisać w innym polu
+      if (pierwszy) setTimeout(() => { if (!form.contains(document.activeElement) && form.isConnected) pierwszy.focus(); }, 30);
     });
   }
 
@@ -316,7 +337,7 @@
 
   function tabela(id, nazwa, naglowki, wiersze, opcje = {}) {
     // wiersze: [{komorki:[html...], dane:[surowe do Excela], klasa, akcja}]
-    tabele[id] = { nazwa, naglowki, wiersze: wiersze.map((w) => w.dane) };
+    tabele[id] = { nazwa, naglowki: opcje.naglowkiXls || naglowki, wiersze: wiersze.map((w) => w.dane) };
     if (!wiersze.length) return '<div class="pusto">' + (opcje.pusto || 'Brak pozycji') + '</div>';
     return '<div class="tabela-owijka"><table class="tabela"><thead><tr>' + naglowki.map((h, i) => '<th class="' + ((opcje.liczbowe || []).includes(i) ? 'l' : '') + '">' + esc(h) + '</th>').join('') + (opcje.akcje ? '<th></th>' : '') + '</tr></thead><tbody>' +
       wiersze.map((w) => '<tr class="' + (w.klasa || '') + '"' + (w.akcja ? ' data-a="' + w.akcja + '" tabindex="0"' : '') + '>' + w.komorki.map((k, i) => '<td class="' + ((opcje.liczbowe || []).includes(i) ? 'l' : '') + '">' + k + '</td>').join('') + (opcje.akcje ? '<td class="akcje-wiersza">' + (w.akcjeHtml || '') + '</td>' : '') + '</tr>').join('') +
@@ -375,8 +396,10 @@
     ['uzupelnienia', 'Do uzupełnienia', 'uzup'],
     ['raporty', 'Raporty', 'rap'],
     ['-'],
+    ['projekty', 'Projekty', 'proj'],
     ['kartoteka', 'Kartoteka modeli', 'kart'],
     ['klienci', 'Klienci', 'kli'],
+    ['dostawcy', 'Dostawcy', 'dost'],
     ['dziennik', 'Dziennik zmian', 'dz'],
     ['problemy', 'Kontrola spójności', 'prob'],
     ['ustawienia', 'Ustawienia', 'ust'],
@@ -478,8 +501,8 @@
   function listaDokumentow(docs, id, kompakt) {
     const wiersze = docs.map((d) => {
       const x = d.ev.dane;
-      const komorki = ['<b class="nowrap">' + esc(x.numer) + '</b>', znacznikDok(d), '<span class="nowrap">' + fmtData(x.data || d.ev.ts) + '</span>', '<span class="nowrap">' + esc(x.projekt || '') + '</span>', esc(x.klientNazwa || x.dostawca || '')];
-      const dane = [x.numer, C.RODZAJE[x.rodzaj].nazwa + (d.anulowany ? ' (anulowany)' : ''), fmtData(x.data || d.ev.ts), x.projekt || '', x.klientNazwa || x.dostawca || ''];
+      const komorki = ['<b class="nowrap">' + esc(x.numer) + '</b>', znacznikDok(d), '<span class="nowrap">' + fmtData(x.data || d.ev.ts) + '</span>', projHtml(x.projekt), esc(x.klientNazwa || x.dostawca || '')];
+      const dane = [x.numer, C.RODZAJE[x.rodzaj].nazwa + (d.anulowany ? ' (anulowany)' : ''), fmtData(x.data || d.ev.ts), x.projekt || '', projNazwa(x.projekt), x.klientNazwa || x.dostawca || ''];
       if (!kompakt) {
         komorki.push((x.pozycje || []).length, esc(osoba(d.ev.autor)));
         dane.push((x.pozycje || []).length, osoba(d.ev.autor));
@@ -487,18 +510,14 @@
       return { klasa: (d.anulowany ? 'anulowany ' : '') + (x.rodzaj === 'WZZ' ? 'wzz' : ''), akcja: 'pokazDok" data-id="' + d.ev.id, komorki, dane };
     });
     const nagl = ['Numer', 'Rodzaj', 'Data', 'Projekt', 'Klient / dostawca'].concat(kompakt ? [] : ['Pozycje', 'Wystawił']);
-    return tabela(id, 'Dokumenty', nagl, wiersze, { pusto: 'Nie ma jeszcze dokumentów', liczbowe: kompakt ? [] : [5] });
+    const naglXls = ['Numer', 'Rodzaj', 'Data', 'Projekt', 'Nazwa projektu', 'Klient / dostawca'].concat(kompakt ? [] : ['Pozycje', 'Wystawił']);
+    return tabela(id, 'Dokumenty', nagl, wiersze, { pusto: 'Nie ma jeszcze dokumentów', liczbowe: kompakt ? [] : [5], naglowkiXls: naglXls });
   }
 
   function poleSzukaj(klucz, placeholder) {
     return '<label class="szukaj">' + ikona('szuk') + '<input type="search" placeholder="' + esc(placeholder || 'Szukaj…') + '" value="' + esc(app.filtr[klucz] || '') + '" data-filtr="' + klucz + '"></label>';
   }
-  const pasuje = (klucz, ...teksty) => {
-    const f = C.normKlucz(app.filtr[klucz] || '');
-    if (!f) return true;
-    const t = C.normKlucz(teksty.join(' '));
-    return f.split(' ').every((cz) => t.includes(cz));
-  };
+  const pasuje = (klucz, ...teksty) => C.pasujeDo(app.filtr[klucz] || '', ...teksty);
 
   WIDOKI.stan = () => {
     const kat = app.filtr.stanKat || '';
@@ -528,29 +547,29 @@
 
   WIDOKI.lokalizacje = () => {
     const wiersze = C.wierszeMagazynu(app.st)
-      .filter((w) => pasuje('lok', w.lok, nazwaModelu(w.modelId), w.sn, w.projekt, model(w.modelId).pn))
+      .filter((w) => pasuje('lok', w.lok, nazwaModelu(w.modelId), w.sn, w.projekt, projNazwa(w.projekt), model(w.modelId).pn))
       .sort((a, b) => (a.lok + nazwaModelu(a.modelId) + a.sn).localeCompare(b.lok + nazwaModelu(b.modelId) + b.sn, 'pl'));
     const html = tabela('lokalizacje', 'Lokalizacje', ['Lokalizacja', 'Model', 'Nr seryjny', 'Ilość', 'Pod projekt', 'Stan techniczny'], wiersze.map((w) => ({
-      komorki: ['<b>' + esc(w.lok) + '</b>', esc(nazwaModelu(w.modelId)), esc(w.sn || ''), fmtIl(w.modelId, w.ilosc), w.projekt ? '<span class="znaczek projekt">' + esc(w.projekt) + '</span>' : '', esc(w.stanTech || '')],
-      dane: [w.lok, nazwaModelu(w.modelId), w.sn || '', w.ilosc, w.projekt || '', w.stanTech || ''],
+      komorki: ['<b>' + esc(w.lok) + '</b>', esc(nazwaModelu(w.modelId)), esc(w.sn || ''), fmtIl(w.modelId, w.ilosc), znaczekProj(w.projekt), esc(w.stanTech || '')],
+      dane: [w.lok, nazwaModelu(w.modelId), w.sn || '', w.ilosc, w.projekt || '', projNazwa(w.projekt), w.stanTech || ''],
       akcjeHtml: '<button class="przycisk maly" data-tip="' + esc(P.TIPY.przenies) + '" data-a="przenies" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-lok="' + esc(w.lok) + '" data-p="' + esc(w.projekt) + '" data-il="' + w.ilosc + '">Przenieś</button>',
-    })), { akcje: true, liczbowe: [3], pusto: 'Magazyn jest pusty' });
+    })), { akcje: true, liczbowe: [3], pusto: 'Magazyn jest pusty', naglowkiXls: ['Lokalizacja', 'Model', 'Nr seryjny', 'Ilość', 'Pod projekt', 'Nazwa projektu', 'Stan techniczny'] });
     return naglowekWidoku('Lokalizacje', 'Co leży w którym miejscu. „Przenieś” zmienia półkę bez formularza – zmiana trafia do dziennika.', przyciskEksportu('lokalizacje'), 'lokalizacje') +
-      '<div class="filtry">' + poleSzukaj('lok', 'Szukaj lokalizacji, modelu, numeru seryjnego, projektu…') + '</div>' + html;
+      '<div class="filtry">' + poleSzukaj('lok', 'Szukaj: lokalizacja, model, nr seryjny, projekt (numer lub nazwa)…') + '</div>' + html;
   };
 
   WIDOKI.urzadzenia = () => {
     const status = app.filtr.urzStatus || '';
     const lista = Array.from(app.st.egzemplarze.values())
-      .filter((e) => (!status || e.status === status) && pasuje('urz', e.sn, nazwaModelu(e.modelId), e.lok, e.projekt, e.klient, e.projektZakupu, model(e.modelId).pn))
+      .filter((e) => (!status || e.status === status) && pasuje('urz', e.sn, nazwaModelu(e.modelId), e.lok, e.projekt, projNazwa(e.projekt), e.klient, e.projektZakupu, projNazwa(e.projektZakupu), model(e.modelId).pn))
       .sort((a, b) => (nazwaModelu(a.modelId) + a.sn).localeCompare(nazwaModelu(b.modelId) + b.sn, 'pl'));
     const html = tabela('urzadzenia', 'Urządzenia', ['Model', 'Nr seryjny', 'Status', 'Gdzie', 'Pod projekt', 'Stan techniczny', 'Przyjęto'], lista.map((e) => ({
       akcja: 'historia" data-m="' + esc(e.modelId) + '" data-sn="' + esc(e.sn),
-      komorki: [esc(nazwaModelu(e.modelId)), '<b class="mono">' + esc(e.sn) + '</b>', e.status === 'magazyn' ? '<span class="znaczek ok">w magazynie</span>' : '<span class="znaczek wyd">u klienta</span>', e.status === 'magazyn' ? esc(e.lok) : esc(e.projekt + (e.klient ? ' · ' + e.klient : '')), e.projektZakupu ? '<span class="znaczek projekt">' + esc(e.projektZakupu) + '</span>' : '', esc(e.stanTech || ''), esc(e.przyjeto ? e.przyjeto.numer : '')],
-      dane: [nazwaModelu(e.modelId), e.sn, e.status === 'magazyn' ? 'w magazynie' : 'u klienta', e.status === 'magazyn' ? e.lok : e.projekt + (e.klient ? ' · ' + e.klient : ''), e.projektZakupu || '', e.stanTech || '', e.przyjeto ? e.przyjeto.numer : ''],
+      komorki: [esc(nazwaModelu(e.modelId)), '<b class="mono">' + esc(e.sn) + '</b>', e.status === 'magazyn' ? '<span class="znaczek ok">w magazynie</span>' : '<span class="znaczek wyd">u klienta</span>', e.status === 'magazyn' ? esc(e.lok) : projHtml(e.projekt) + (e.klient ? '<small class="szary blok">' + esc(e.klient) + '</small>' : ''), znaczekProj(e.projektZakupu), esc(e.stanTech || ''), esc(e.przyjeto ? e.przyjeto.numer : '')],
+      dane: [nazwaModelu(e.modelId), e.sn, e.status === 'magazyn' ? 'w magazynie' : 'u klienta', e.status === 'magazyn' ? e.lok : projTekst(e.projekt) + (e.klient ? ' · ' + e.klient : ''), e.projektZakupu ? projTekst(e.projektZakupu) : '', e.stanTech || '', e.przyjeto ? e.przyjeto.numer : ''],
     })), { pusto: 'Brak urządzeń z numerami seryjnymi' });
     return naglowekWidoku('Urządzenia', 'Każde urządzenie śledzone po numerze seryjnym. Kliknij, aby zobaczyć historię.', przyciskEksportu('urzadzenia'), 'urzadzenia') +
-      '<div class="filtry">' + poleSzukaj('urz', 'Szukaj numeru seryjnego, modelu, projektu, klienta…') +
+      '<div class="filtry">' + poleSzukaj('urz', 'Szukaj: nr seryjny, model, projekt (numer lub nazwa), klient…') +
       '<select data-filtr="urzStatus"><option value="">Wszystkie</option><option value="magazyn" ' + (status === 'magazyn' ? 'selected' : '') + '>W magazynie</option><option value="wydany" ' + (status === 'wydany' ? 'selected' : '') + '>U klienta</option></select></div>' + html;
   };
 
@@ -560,10 +579,10 @@
       const x = d.ev.dane;
       if (rodzaj === 'bezpodpisu') { if (d.anulowany || d.skany.length) return false; }
       else if (rodzaj && x.rodzaj !== rodzaj) return false;
-      return pasuje('dok', x.numer, x.projekt, x.klientNazwa, x.dostawca, x.nrFaktury, x.osoba, x.uwagi, (x.pozycje || []).map((p) => nazwaModelu(p.modelId) + ' ' + (p.sn || '')).join(' '));
+      return pasuje('dok', x.numer, x.projekt, projNazwa(x.projekt), x.klientNazwa, x.dostawca, x.nrFaktury, x.osoba, x.uwagi, (x.pozycje || []).map((p) => nazwaModelu(p.modelId) + ' ' + (p.sn || '') + ' ' + (p.projekt ? projTekst(p.projekt) : '')).join(' '));
     });
     return naglowekWidoku('Dokumenty', 'Kliknij dokument, aby go wydrukować, dołączyć skan podpisu albo anulować.', przyciskEksportu('dokumenty'), 'dokumenty') +
-      '<div class="filtry">' + poleSzukaj('dok', 'Szukaj numeru, projektu, klienta, numeru seryjnego…') +
+      '<div class="filtry">' + poleSzukaj('dok', 'Szukaj: numer, projekt (numer lub nazwa), klient, dostawca, nr seryjny…') +
       '<select data-filtr="dokRodzaj"><option value="">Wszystkie rodzaje</option>' + Object.entries(C.RODZAJE).map(([k, v]) => '<option value="' + k + '" ' + (rodzaj === k ? 'selected' : '') + '>' + k + ' – ' + v.nazwa + '</option>').join('') + '<option value="bezpodpisu" ' + (rodzaj === 'bezpodpisu' ? 'selected' : '') + '>Bez dołączonego podpisu</option></select></div>' +
       listaDokumentow(docs, 'dokumenty');
   };
@@ -573,8 +592,8 @@
     const lista = app.st.uzupelnienia.filter((u) => pokazZamkniete || !u.zamkniete).slice().reverse();
     const html = tabela('uzupelnienia', 'Do uzupełnienia', ['Projekt zakupu (brakuje)', 'Model', 'Nr seryjny / ilość', 'Wydano na projekt', 'Dokument', 'Data', 'Powód', 'Status'], lista.map((u) => ({
       klasa: u.zamkniete ? 'zamkniete' : 'wzz',
-      komorki: ['<b>' + esc(u.projektZakupu) + '</b>', esc(nazwaModelu(u.modelId)), u.sn ? '<span class="mono">' + esc(u.sn) + '</span>' : fmtIl(u.modelId, u.ilosc), esc(u.projektDocelowy), '<a href="#" data-a="pokazDok" data-id="' + esc(u.docId) + '">' + esc(u.numer) + '</a>', fmtData(u.ts), esc(u.powod), u.zamkniete ? '<span class="znaczek ok">uzupełnione</span><div class="maly szary">' + esc(u.zamknieto.uwagi || '') + '</div>' : '<span class="znaczek brak">do uzupełnienia</span>'],
-      dane: [u.projektZakupu, nazwaModelu(u.modelId), u.sn || u.ilosc + ' ' + jedn(u.modelId), u.projektDocelowy, u.numer, fmtData(u.ts), u.powod, u.zamkniete ? 'uzupełnione: ' + (u.zamknieto.uwagi || '') : 'do uzupełnienia'],
+      komorki: ['<b>' + projHtml(u.projektZakupu) + '</b>', esc(nazwaModelu(u.modelId)), u.sn ? '<span class="mono">' + esc(u.sn) + '</span>' : fmtIl(u.modelId, u.ilosc), projHtml(u.projektDocelowy), '<a href="#" data-a="pokazDok" data-id="' + esc(u.docId) + '">' + esc(u.numer) + '</a>', fmtData(u.ts), esc(u.powod), u.zamkniete ? '<span class="znaczek ok">uzupełnione</span><div class="maly szary">' + esc(u.zamknieto.uwagi || '') + '</div>' : '<span class="znaczek brak">do uzupełnienia</span>'],
+      dane: [projTekst(u.projektZakupu), nazwaModelu(u.modelId), u.sn || u.ilosc + ' ' + jedn(u.modelId), projTekst(u.projektDocelowy), u.numer, fmtData(u.ts), u.powod, u.zamkniete ? 'uzupełnione: ' + (u.zamknieto.uwagi || '') : 'do uzupełnienia'],
       akcjeHtml: u.zamkniete ? '' : '<button class="przycisk maly" data-a="uzupelnij" data-id="' + esc(u.docId) + '" data-idx="' + u.idx + '">Uzupełnione…</button>',
     })), { akcje: true, pusto: pokazZamkniete ? 'Brak wydań zastępczych' : 'Nic nie czeka na uzupełnienie' });
     return naglowekWidoku('Do uzupełnienia', 'Sprzęt kupiony pod projekt, który poszedł wydaniem zastępczym (WZZ) na inny projekt. Trzeba go dokupić pod projekt zakupu.', przyciskEksportu('uzupelnienia'), 'uzupelnienia') +
@@ -585,23 +604,23 @@
     const rap = app.filtr.raport || 'projekt';
     const zakladki = [['projekt', 'Wydane na projekt'], ['klient', 'Wydane do klienta'], ['podprojekt', 'Pod projekt w magazynie'], ['minimum', 'Poniżej minimum'], ['eol', 'EOL na stanie'], ['podpis', 'Bez podpisu'], ['historia', 'Historia urządzenia']];
     let tresc = '';
-    const pod = C.podpowiedzi(app.st);
     if (rap === 'projekt' || rap === 'klient') {
       const wartosc = app.filtr['rap_' + rap] || '';
-      const lista = rap === 'projekt' ? pod.projekty : pod.klienci;
-      let w = C.wydaneNaProjekt(app.st, rap === 'projekt' ? wartosc : '');
-      if (rap === 'klient') w = w.filter((x) => !wartosc || C.normKlucz(x.klient) === C.normKlucz(wartosc));
-      tresc = '<div class="filtry"><label class="pole wiersz"><span>' + (rap === 'projekt' ? 'Numer projektu' : 'Klient') + '</span><input list="dl-rap" value="' + esc(wartosc) + '" data-filtr="rap_' + rap + '" data-natychmiast="1" placeholder="wszystkie"></label><datalist id="dl-rap">' + lista.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist></div>' +
-        tabela('raport', rap === 'projekt' ? 'Wydane na projekt ' + (wartosc || '(wszystkie)') : 'Wydane do klienta ' + (wartosc || '(wszyscy)'), ['Projekt', 'Klient', 'Model', 'Nr seryjny', 'Ilość', 'Dokument'], w.sort((a, b) => (a.projekt + nazwaModelu(a.modelId)).localeCompare(b.projekt + nazwaModelu(b.modelId), 'pl')).map((x) => ({
-          komorki: [esc(x.projekt), esc(x.klient), esc(nazwaModelu(x.modelId)), '<span class="mono">' + esc(x.sn) + '</span>', fmtIl(x.modelId, x.ilosc), esc(x.numer || '')],
-          dane: [x.projekt, x.klient, nazwaModelu(x.modelId), x.sn, x.ilosc, x.numer || ''],
-        })), { liczbowe: [4], pusto: 'Nic nie zostało wydane' });
+      const dokladny = rap === 'projekt' && C.projektWgNumeru(app.st, wartosc) || rap === 'projekt' && C.podpowiedzi(app.st).projekty.some((x) => C.normKlucz(x) === C.normKlucz(wartosc));
+      let w = C.wydaneNaProjekt(app.st, dokladny ? wartosc : '');
+      if (!dokladny && wartosc) w = w.filter((x) => rap === 'projekt' ? C.pasujeDo(wartosc, x.projekt, projNazwa(x.projekt)) : C.pasujeDo(wartosc, x.klient));
+      const tytul = rap === 'projekt' ? 'Wydane na projekt ' + (wartosc ? (dokladny ? projTekst(wartosc) : '„' + wartosc + '”') : '(wszystkie)') : 'Wydane do klienta ' + (wartosc || '(wszyscy)');
+      tresc = '<div class="filtry">' + pole(rap === 'projekt' ? 'Projekt' : 'Klient', wybierak(rap === 'projekt' ? 'projekty' : 'klienci', 'filtr:rap_' + rap, wartosc, { placeholder: rap === 'projekt' ? 'wszystkie – wpisz numer albo nazwę' : 'wszyscy – wpisz nazwę' }), 'wiersz filtr-wyboru') + '</div>' +
+        tabela('raport', tytul, ['Projekt', 'Klient', 'Model', 'Nr seryjny', 'Ilość', 'Dokument'], w.sort((a, b) => (a.projekt + nazwaModelu(a.modelId)).localeCompare(b.projekt + nazwaModelu(b.modelId), 'pl')).map((x) => ({
+          komorki: [projHtml(x.projekt), esc(x.klient), esc(nazwaModelu(x.modelId)), '<span class="mono">' + esc(x.sn) + '</span>', fmtIl(x.modelId, x.ilosc), esc(x.numer || '')],
+          dane: [x.projekt, projNazwa(x.projekt), x.klient, nazwaModelu(x.modelId), x.sn, x.ilosc, x.numer || ''],
+        })), { liczbowe: [4], pusto: 'Nic nie zostało wydane', naglowkiXls: ['Projekt', 'Nazwa projektu', 'Klient', 'Model', 'Nr seryjny', 'Ilość', 'Dokument'] });
     } else if (rap === 'podprojekt') {
       const w = C.wierszeMagazynu(app.st).filter((x) => x.projekt).sort((a, b) => (a.projekt + nazwaModelu(a.modelId)).localeCompare(b.projekt + nazwaModelu(b.modelId), 'pl'));
       tresc = tabela('raport', 'Kupione pod projekt – w magazynie', ['Projekt', 'Model', 'Nr seryjny', 'Ilość', 'Lokalizacja'], w.map((x) => ({
-        komorki: ['<b>' + esc(x.projekt) + '</b>', esc(nazwaModelu(x.modelId)), '<span class="mono">' + esc(x.sn) + '</span>', fmtIl(x.modelId, x.ilosc), esc(x.lok)],
-        dane: [x.projekt, nazwaModelu(x.modelId), x.sn, x.ilosc, x.lok],
-      })), { liczbowe: [3], pusto: 'Nic nie czeka w magazynie pod projekty' });
+        komorki: ['<b>' + projHtml(x.projekt) + '</b>', esc(nazwaModelu(x.modelId)), '<span class="mono">' + esc(x.sn) + '</span>', fmtIl(x.modelId, x.ilosc), esc(x.lok)],
+        dane: [x.projekt, projNazwa(x.projekt), nazwaModelu(x.modelId), x.sn, x.ilosc, x.lok],
+      })), { liczbowe: [3], pusto: 'Nic nie czeka w magazynie pod projekty', naglowkiXls: ['Projekt', 'Nazwa projektu', 'Model', 'Nr seryjny', 'Ilość', 'Lokalizacja'] });
     } else if (rap === 'minimum' || rap === 'eol') {
       const w = C.stanyModeli(app.st).filter((x) => (rap === 'minimum' ? x.ponizejMin : x.model.status === 'EOL' && x.razem > 0));
       tresc = tabela('raport', rap === 'minimum' ? 'Poniżej stanu minimalnego' : 'Modele EOL na stanie', ['Kategoria', 'Model', 'Kod producenta', 'W magazynie', 'Stan minimalny', 'Status'], w.map((x) => ({
@@ -623,7 +642,7 @@
 
   function historiaHtml(e) {
     return '<section class="karta"><h3>' + esc(nazwaModelu(e.modelId)) + ' · SN <span class="mono">' + esc(e.sn) + '</span></h3>' +
-      '<p>' + (e.status === 'magazyn' ? 'W magazynie: <b>' + esc(e.lok) + '</b>' : 'U klienta: <b>' + esc(e.klient) + '</b>, projekt <b>' + esc(e.projekt) + '</b>') + ' · stan: ' + esc(e.stanTech) + (e.projektZakupu ? ' · kupione pod projekt <b>' + esc(e.projektZakupu) + '</b>' : '') + '</p>' +
+      '<p>' + (e.status === 'magazyn' ? 'W magazynie: <b>' + esc(e.lok) + '</b>' : 'U klienta: <b>' + esc(e.klient) + '</b>, projekt <b>' + esc(projTekst(e.projekt)) + '</b>') + ' · stan: ' + esc(e.stanTech) + (e.projektZakupu ? ' · kupione pod projekt <b>' + esc(projTekst(e.projektZakupu)) + '</b>' : '') + '</p>' +
       '<ol class="os-czasu">' + e.historia.slice().reverse().map((h) => '<li><span class="szary">' + fmtCzas(h.ts) + '</span> ' + (h.docId ? '<a href="#" data-a="pokazDok" data-id="' + esc(h.docId) + '">' + esc(h.numer) + '</a> · ' : '') + esc(h.opis) + '</li>').join('') + '</ol></section>';
   }
 
@@ -647,6 +666,49 @@
     })), { pusto: 'Lista klientów jest pusta. Klienta możesz też wpisać ręcznie przy wydaniu.' });
     return naglowekWidoku('Klienci', 'Lista jest pomocą, nie obowiązkiem – przy wydaniu można wpisać dowolnego klienta.', '<button class="przycisk glowny" data-a="edytujKlienta">' + ikona('plus') + 'Nowy klient</button>' + przyciskEksportu('klienci'), 'klienci') +
       '<div class="filtry">' + poleSzukaj('kli', 'Szukaj klienta…') + '</div>' + html;
+  };
+
+  WIDOKI.projekty = () => {
+    const pokazZak = !!app.filtr.projZak;
+    const wMag = new Map();
+    for (const w of C.wierszeMagazynu(app.st)) if (w.projekt) { const k = C.normKlucz(w.projekt); wMag.set(k, (wMag.get(k) || 0) + 1); }
+    const wyd = new Map();
+    for (const w of C.wydaneNaProjekt(app.st, '')) { const k = C.normKlucz(w.projekt); wyd.set(k, (wyd.get(k) || 0) + 1); }
+    const wszystkie = C.listaProjektow(app.st);
+    const lista = wszystkie.filter((p) => (pokazZak || p.status !== 'zakończony') && pasuje('proj', p.numer, p.nazwa, p.klientNazwa, p.adres, p.uwagi));
+    const bezNazwy = wszystkie.filter((p) => !p.nazwa).length;
+    const brak = '<span class="szary">–</span>';
+    const html = tabela('projekty', 'Projekty', ['Numer', 'Nazwa', 'Klient', 'Adres obiektu', 'Status', 'Pod projekt w magazynie', 'Wydane', 'Ostatni dokument'], lista.map((p) => {
+      const k = C.normKlucz(p.numer);
+      return {
+        klasa: p.status === 'zakończony' ? 'zamkniete' : '',
+        akcja: 'pokazProjekt" data-numer="' + esc(p.numer),
+        komorki: ['<b class="nowrap">' + esc(p.numer) + '</b>', p.nazwa ? '<b>' + esc(p.nazwa) + '</b>' : '<span class="ostrz-tekst maly">bez nazwy – kliknij, żeby uzupełnić</span>', esc(p.klientNazwa || ''), esc(p.adres || ''), p.status === 'zakończony' ? '<span class="znaczek anul">zakończony</span>' : '<span class="znaczek ok">w toku</span>', wMag.get(k) ? fmtL(wMag.get(k)) + ' ' + odm(wMag.get(k), 'pozycja', 'pozycje', 'pozycji') : brak, wyd.get(k) ? fmtL(wyd.get(k)) + ' ' + odm(wyd.get(k), 'pozycja', 'pozycje', 'pozycji') : brak, p.ostatni ? '<span class="nowrap">' + fmtData(p.ostatni) + '</span>' : brak],
+        dane: [p.numer, p.nazwa || '', p.klientNazwa || '', p.adres || '', p.status || 'w toku', wMag.get(k) || 0, wyd.get(k) || 0, p.ostatni ? fmtData(p.ostatni) : '', p.uwagi || ''],
+      };
+    }), { pusto: wszystkie.length ? 'Nic nie pasuje do wyszukiwania' : 'Nie ma jeszcze projektów. Dodaj pierwszy przyciskiem „Nowy projekt” albo wpisz numer w dokumencie – aplikacja zapyta o nazwę.', liczbowe: [5, 6], naglowkiXls: ['Numer', 'Nazwa', 'Klient', 'Adres obiektu', 'Status', 'Pozycje pod projekt w magazynie', 'Pozycje wydane', 'Ostatni dokument', 'Uwagi'] });
+    return naglowekWidoku('Projekty', 'Numer i nazwa projektu, klient i adres obiektu. Kliknij projekt, żeby zobaczyć jego dokumenty i sprzęt.', '<button class="przycisk glowny" data-a="edytujProjekt">' + ikona('plus') + 'Nowy projekt</button>' + przyciskEksportu('projekty'), 'projekty') +
+      (bezNazwy ? '<div class="alert info">' + bezNazwy + ' ' + odm(bezNazwy, 'projekt nie ma', 'projekty nie mają', 'projektów nie ma') + ' jeszcze nazwy. Uzupełnij ją – łatwiej będzie je znaleźć na listach.</div>' : '') +
+      '<div class="filtry">' + poleSzukaj('proj', 'Szukaj: numer, nazwa, klient, adres…') + '<label class="przelacznik"><input type="checkbox" data-filtr="projZak" ' + (pokazZak ? 'checked' : '') + '> pokaż także zakończone</label></div>' + html;
+  };
+
+  WIDOKI.dostawcy = () => {
+    const ukryci = !!app.filtr.dostUkryci;
+    const przyjecia = new Map();
+    for (const { ev, anulowany } of app.st.dokumenty.values()) {
+      if (anulowany || ev.dane.rodzaj !== 'PZ') continue;
+      const d = ev.dane.dostawcaId ? app.st.dostawcy.get(ev.dane.dostawcaId) : C.dostawcaWgNazwy(app.st, ev.dane.dostawca);
+      if (d) przyjecia.set(d.dostawcaId, (przyjecia.get(d.dostawcaId) || 0) + 1);
+    }
+    const lista = Array.from(app.st.dostawcy.values()).filter((d) => (ukryci || d.aktywny !== false) && pasuje('dost', d.nazwa, d.pelnaNazwa, d.nip, d.krs, d.regon, d.adres, d.adresBiura, d.marki, d.uwagi, d.email, d.www)).sort((a, b) => a.nazwa.localeCompare(b.nazwa, 'pl'));
+    const html = tabela('dostawcy', 'Dostawcy', ['Dostawca', 'Pełna nazwa', 'NIP', 'KRS', 'Adres', 'Marki', 'Kontakt', 'Przyjęcia'], lista.map((d) => ({
+      klasa: d.aktywny === false ? 'zamkniete' : '',
+      akcja: 'edytujDostawce" data-id="' + esc(d.dostawcaId),
+      komorki: ['<b>' + esc(d.nazwa) + '</b>' + (d.aktywny === false ? ' <span class="znaczek anul">ukryty</span>' : '') + (d.uwagi ? '<small class="szary blok">' + esc(d.uwagi) + '</small>' : ''), '<small>' + esc(d.pelnaNazwa || '') + '</small>', '<span class="mono nowrap">' + esc(d.nip || '') + '</span>', '<span class="mono">' + esc(d.krs || '') + '</span>', esc(d.adres || '') + (d.adresBiura ? '<small class="szary blok">biuro: ' + esc(d.adresBiura) + '</small>' : ''), esc(d.marki || ''), [d.tel, d.email, d.www].filter(Boolean).map((x) => '<span class="nowrap">' + esc(x) + '</span>').join('<br>'), przyjecia.get(d.dostawcaId) || '<span class="szary">–</span>'],
+      dane: [d.nazwa, d.pelnaNazwa || '', d.nip || '', d.regon || '', d.krs || '', d.adres || '', d.adresBiura || '', d.marki || '', d.tel || '', d.email || '', d.www || '', przyjecia.get(d.dostawcaId) || 0, d.zrodlo || '', d.uwagi || ''],
+    })), { liczbowe: [7], pusto: 'Nic nie pasuje do wyszukiwania', naglowkiXls: ['Dostawca', 'Pełna nazwa', 'NIP', 'REGON', 'KRS', 'Adres siedziby', 'Adres biura', 'Marki', 'Telefon', 'E-mail', 'WWW', 'Przyjęcia', 'Źródło danych', 'Uwagi'] });
+    return naglowekWidoku('Dostawcy', 'Biblioteka dostawców z danymi z rejestrów KRS i REGON. Przy przyjęciu wybierasz dostawcę z listy, a jego pełne dane trafiają na formularz.', '<button class="przycisk glowny" data-a="edytujDostawce">' + ikona('plus') + 'Nowy dostawca</button>' + przyciskEksportu('dostawcy'), 'dostawcy') +
+      '<div class="filtry">' + poleSzukaj('dost', 'Szukaj: nazwa, NIP, marka (np. shure), miasto…') + '<label class="przelacznik"><input type="checkbox" data-filtr="dostUkryci" ' + (ukryci ? 'checked' : '') + '> pokaż ukrytych</label></div>' + html;
   };
 
   WIDOKI.dziennik = () => {
@@ -702,6 +764,355 @@
       '</div></div>';
   };
 
+  // ------------------------------------------------------------ pola wyboru z listy
+  //
+  // Pole tekstowe z rozwijaną listą zapisanych wartości: klik albo pisanie pokazuje listę,
+  // szukanie działa po kawałku numeru, nazwy, NIP-u itd. (bez względu na ogonki),
+  // strzałki + Enter wybierają. Obok – osobny przycisk „Nowy”.
+  // cel: 'f:pole' (nagłówek dokumentu), 'p:nr:pole' (pozycja), 'n:nazwa' (pole w oknie), 'filtr:klucz'.
+
+  function atrybutyCelu(cel) {
+    const [typ, ...r] = cel.split(':');
+    if (typ === 'f') return 'data-f="' + esc(r[0]) + '"';
+    if (typ === 'p') return 'data-p="' + esc(r.join(':')) + '"';
+    if (typ === 'filtr') return 'data-filtr="' + esc(r[0]) + '" data-natychmiast="1"';
+    return 'name="' + esc(r[0]) + '"';
+  }
+
+  function celPola(el) {
+    if (el.dataset.f) return 'f:' + el.dataset.f;
+    if (el.dataset.p) return 'p:' + el.dataset.p;
+    if (el.dataset.filtr) return 'filtr:' + el.dataset.filtr;
+    return el.name ? 'n:' + el.name : '';
+  }
+
+  const NOWY_ETYKIETA = { projekty: 'Nowy projekt', dostawcy: 'Nowy dostawca', klienci: 'Nowy klient', modele: 'Nowy model w kartotece' };
+
+  function wybierak(zrodlo, cel, wartosc, o = {}) {
+    const pole = '<div class="wybierak"><input ' + atrybutyCelu(cel) + ' ' + (o.atr || '') + ' value="' + esc(wartosc) + '" data-wybierak="' + zrodlo + '"' + (o.nowy ? ' data-nowy="1"' : '') +
+      ' autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="' + esc(o.placeholder || '') + '">' +
+      '<button type="button" class="wybierak-rozwin" data-rozwin tabindex="-1" aria-label="Pokaż listę">' + ikona('dol') + '</button></div>';
+    const przycisk = o.nowy ? '<button type="button" class="przycisk maly nowy-obok" data-a="dodajDoWybieraka" data-zrodlo="' + zrodlo + '" data-cel="' + esc(cel) + '" data-tip="' + esc(o.nowyTip || NOWY_ETYKIETA[zrodlo] || 'Dodaj nowy') + '">' + ikona('plus') + 'Nowy</button>' : '';
+    const opis = o.opis ? '<small class="opis-wyboru">' + opisWyboru(zrodlo, wartosc, cel) + '</small>' : '';
+    return (przycisk ? '<div class="wiersz-wyboru">' + pole + przycisk + '</div>' : pole) + opis;
+  }
+
+  // źródła list – liczone raz na stan magazynu
+  let pamiecZrodel = { st: null, dane: {} };
+  function opcjeZrodla(nazwa) {
+    if (pamiecZrodel.st !== app.st) pamiecZrodel = { st: app.st, dane: {} };
+    if (!pamiecZrodel.dane[nazwa]) pamiecZrodel.dane[nazwa] = (ZRODLA[nazwa] || (() => []))();
+    return pamiecZrodel.dane[nazwa];
+  }
+
+  const ZRODLA = {
+    projekty() {
+      return C.listaProjektow(app.st)
+        .sort((a, b) => (a.status === 'zakończony') - (b.status === 'zakończony'))
+        .map((p) => ({ w: p.numer, t: p.numer, o: [p.nazwa || 'bez nazwy', p.klientNazwa].filter(Boolean).join(' · ') + (p.status === 'zakończony' ? ' · zakończony' : ''), s: [p.numer, p.nazwa, p.klientNazwa, p.adres].join(' '), kl: p.status === 'zakończony' ? 'wyszarzona' : '' }));
+    },
+    klienci() {
+      const m = new Map();
+      for (const k of app.st.klienci.values()) m.set(C.normKlucz(k.nazwa), { w: k.nazwa, t: k.nazwa, o: [k.nip ? 'NIP ' + k.nip : '', k.adres].filter(Boolean).join(' · '), s: [k.nazwa, k.nip, k.adres, k.kontakt].join(' ') });
+      for (const n of C.podpowiedzi(app.st).klienci) if (!m.has(C.normKlucz(n))) m.set(C.normKlucz(n), { w: n, t: n, o: 'wpisany w dokumentach', s: n });
+      return Array.from(m.values()).sort((a, b) => a.t.localeCompare(b.t, 'pl'));
+    },
+    dostawcy() {
+      const m = new Map();
+      for (const d of app.st.dostawcy.values()) {
+        if (d.aktywny === false) continue;
+        const miasto = (String(d.adres || '').match(/\d{2}-\d{3}\s+(.+)$/) || [])[1] || '';
+        m.set(C.normKlucz(d.nazwa), { w: d.nazwa, t: d.nazwa, o: [d.marki, d.nip ? 'NIP ' + d.nip : '', miasto].filter(Boolean).join(' · '), s: [d.nazwa, d.pelnaNazwa, d.nip, d.marki, d.adres, d.uwagi].join(' ') });
+      }
+      for (const n of C.podpowiedzi(app.st).dostawcy) if (!m.has(C.normKlucz(n))) m.set(C.normKlucz(n), { w: n, t: n, o: 'spoza biblioteki – wpisany w przyjęciach', s: n });
+      return Array.from(m.values()).sort((a, b) => a.t.localeCompare(b.t, 'pl'));
+    },
+    lokalizacje() {
+      const ile = new Map();
+      for (const w of C.wierszeMagazynu(app.st)) ile.set(w.lok, (ile.get(w.lok) || 0) + 1);
+      return C.podpowiedzi(app.st).lokalizacje.map((l) => ({ w: l, t: l, o: ile.get(l) ? ile.get(l) + ' ' + odm(ile.get(l), 'pozycja', 'pozycje', 'pozycji') : 'pusta', s: l }));
+    },
+    modele() {
+      return Array.from(app.st.modele.values()).filter((m) => m.status !== 'wycofany')
+        .sort((a, b) => etykietaModelu(a).localeCompare(etykietaModelu(b), 'pl'))
+        .map((m) => ({ w: etykietaModelu(m), t: (m.producent ? m.producent + ' ' : '') + m.model, o: [m.kategoria, m.pn, m.seryjny ? 'po numerze seryjnym' : m.jednostka === 'm' ? 'w metrach' : 'w sztukach', m.status === 'EOL' ? 'EOL' : ''].filter(Boolean).join(' · '), s: [m.producent, m.model, m.pn, m.ean, m.kategoria].join(' ') }));
+    },
+    producenci: () => C.podpowiedzi(app.st).producenci.map((x) => ({ w: x, t: x, s: x })),
+    osoby: () => C.podpowiedzi(app.st).osoby.map((x) => ({ w: x, t: x, s: x })),
+    adresy() {
+      const m = new Map();
+      for (const a of C.podpowiedzi(app.st).adresy) m.set(C.normKlucz(a), { w: a, t: a, s: a });
+      for (const k of app.st.klienci.values()) if (k.adres && !m.has(C.normKlucz(k.adres))) m.set(C.normKlucz(k.adres), { w: k.adres, t: k.adres, o: k.nazwa, s: k.adres + ' ' + k.nazwa });
+      return Array.from(m.values()).sort((a, b) => a.t.localeCompare(b.t, 'pl'));
+    },
+  };
+
+  const linkDodaj = (zrodlo, cel, tekst, etykieta) => '<a href="#" data-a="dodajDoWybieraka" data-zrodlo="' + zrodlo + '" data-cel="' + esc(cel) + '" data-tekst="' + esc(tekst) + '">' + etykieta + '</a>';
+
+  /** Krótka informacja pod polem: co zostało wybrane (np. nazwa projektu, NIP dostawcy) albo że wartość jest nowa. */
+  function opisWyboru(zrodlo, wartosc, cel) {
+    const v = C.norm(wartosc);
+    if (!v) return '';
+    if (zrodlo === 'projekty') {
+      const n = projNazwa(v);
+      const p = C.projektWgNumeru(app.st, v);
+      if (n) return ikona('proj') + '<b>' + esc(n) + '</b>' + (p && p.klientNazwa ? ' · ' + esc(p.klientNazwa) : '') + (p && p.status === 'zakończony' ? ' · <span class="ostrz-tekst">projekt zakończony</span>' : '');
+      if (!C.czyNowaWartosc(C.podpowiedzi(app.st).projekty, v)) return 'Projekt bez nazwy – <a href="#" data-a="edytujProjekt" data-numer="' + esc(v) + '">dodaj nazwę</a>';
+      return '<span class="ostrz-tekst">Nowy projekt.</span> Przy zapisie zapytam o nazwę albo ' + linkDodaj('projekty', cel, v, 'dodaj go teraz') + '.';
+    }
+    if (zrodlo === 'dostawcy') {
+      const d = C.dostawcaWgNazwy(app.st, v);
+      if (d) return [d.pelnaNazwa && d.pelnaNazwa !== d.nazwa ? esc(d.pelnaNazwa) : '', d.nip ? 'NIP ' + esc(d.nip) : '', esc(d.adres || '')].filter(Boolean).join(' · ');
+      return '<span class="ostrz-tekst">Spoza biblioteki dostawców.</span> ' + linkDodaj('dostawcy', cel, v, 'Dodaj do biblioteki') + ', żeby na formularzu był NIP i adres.';
+    }
+    if (zrodlo === 'klienci') {
+      const k = Array.from(app.st.klienci.values()).find((x) => C.normKlucz(x.nazwa) === C.normKlucz(v));
+      if (k) return [k.nip ? 'NIP ' + esc(k.nip) : '', esc(k.adres || '')].filter(Boolean).join(' · ') || 'z listy klientów';
+      return 'Spoza listy klientów – wpisze się tylko w dokument. ' + linkDodaj('klienci', cel, v, 'Dodaj do listy');
+    }
+    if (zrodlo === 'lokalizacje') return C.czyNowaWartosc(C.podpowiedzi(app.st).lokalizacje, v) ? '<span class="ostrz-tekst">Nowa lokalizacja</span> – sprawdź pisownię.' : '';
+    return '';
+  }
+
+  const listaWyboru = document.createElement('div');
+  listaWyboru.className = 'lista-wyboru';
+  listaWyboru.setAttribute('role', 'listbox');
+  listaWyboru.hidden = true;
+  document.body.appendChild(listaWyboru);
+  const wyb = { pole: null, opcje: [], aktywna: -1, ustawiam: false };
+
+  /** Pogrubia w tekście fragmenty pasujące do wpisanych słów (bez względu na ogonki). */
+  function podswietl(tekst, zapytanie) {
+    const slowa = C.kluczSzukania(zapytanie).split(' ').filter(Boolean);
+    const t = String(tekst || '');
+    if (!slowa.length) return esc(t);
+    const znaki = Array.from(t);
+    const klucz = znaki.map((z) => C.kluczSzukania(z).charAt(0) || z.toLowerCase()).join('');
+    const zazn = new Array(znaki.length).fill(false);
+    for (const sl of slowa) {
+      let i = klucz.indexOf(sl);
+      while (i >= 0) { for (let j = i; j < i + sl.length && j < zazn.length; j++) zazn[j] = true; i = klucz.indexOf(sl, i + sl.length); }
+    }
+    let wynik = '';
+    let otwarte = false;
+    znaki.forEach((z, i) => {
+      if (zazn[i] && !otwarte) { wynik += '<mark>'; otwarte = true; }
+      if (!zazn[i] && otwarte) { wynik += '</mark>'; otwarte = false; }
+      wynik += esc(z);
+    });
+    return wynik + (otwarte ? '</mark>' : '');
+  }
+
+  function otworzListe(pole, filtruj) {
+    const zrodlo = pole.dataset.wybierak;
+    const wszystkie = opcjeZrodla(zrodlo);
+    const zapytanie = filtruj ? pole.value : '';
+    const pasujace = wszystkie.filter((o) => C.pasujeDo(zapytanie, o.s || o.t, o.t));
+    if (zapytanie) {
+      // najpierw te, które zaczynają się od wpisanego tekstu
+      const z = C.kluczSzukania(zapytanie);
+      pasujace.sort((a, b) => (C.kluczSzukania(b.t).startsWith(z) ? 1 : 0) - (C.kluczSzukania(a.t).startsWith(z) ? 1 : 0));
+    }
+    const opcje = pasujace.slice(0, 80);
+    wyb.pole = pole;
+    wyb.opcje = opcje;
+    const biezaca = C.normKlucz(pole.value);
+    wyb.aktywna = filtruj ? (opcje.length ? 0 : -1) : opcje.findIndex((o) => C.normKlucz(o.w) === biezaca);
+    const nowy = pole.dataset.nowy && NOWY_ETYKIETA[zrodlo];
+    listaWyboru.innerHTML = opcje.map((o, i) => '<div class="opcja ' + (o.kl || '') + (i === wyb.aktywna ? ' aktywna' : '') + '" role="option" data-i="' + i + '"><span class="opcja-t">' + podswietl(o.t, zapytanie) + '</span>' + (o.o ? '<small>' + podswietl(o.o, zapytanie) + '</small>' : '') + '</div>').join('') +
+      (pasujace.length > opcje.length ? '<div class="opcja-info">…i jeszcze ' + (pasujace.length - opcje.length) + ' – wpisz więcej, żeby zawęzić</div>' : '') +
+      (!opcje.length ? '<div class="opcja-info">' + (wszystkie.length ? 'Nic nie pasuje do „' + esc(zapytanie) + '”.' : 'Lista jest jeszcze pusta.') + (nowy ? '' : ' Możesz wpisać nową wartość.') + '</div>' : '') +
+      (nowy ? '<div class="opcja dodaj" data-dodaj>' + ikona('plus') + '<span>' + nowy + (zapytanie ? ' „' + esc(zapytanie) + '”' : '') + '…</span></div>' : '');
+    listaWyboru.hidden = false;
+    pole.setAttribute('aria-expanded', 'true');
+    ustawListe();
+    const akt = $('.opcja.aktywna', listaWyboru);
+    if (akt) akt.scrollIntoView({ block: 'nearest' });
+  }
+
+  function ustawListe() {
+    if (!wyb.pole || !wyb.pole.isConnected) return zamknijListe();
+    const r = (wyb.pole.closest('.wybierak') || wyb.pole).getBoundingClientRect();
+    const szer = Math.max(r.width, 300);
+    listaWyboru.style.width = szer + 'px';
+    listaWyboru.style.left = Math.max(8, Math.min(innerWidth - szer - 8, r.left)) + 'px';
+    const wys = Math.min(listaWyboru.scrollHeight, 320);
+    const podSpodem = innerHeight - r.bottom - 8;
+    if (podSpodem < Math.min(wys, 200) && r.top > podSpodem) {
+      listaWyboru.style.top = Math.max(8, r.top - Math.min(wys, r.top - 16) - 4) + 'px';
+      listaWyboru.style.maxHeight = Math.min(320, r.top - 16) + 'px';
+    } else {
+      listaWyboru.style.top = r.bottom + 4 + 'px';
+      listaWyboru.style.maxHeight = Math.max(120, Math.min(320, podSpodem - 4)) + 'px';
+    }
+  }
+
+  function zamknijListe() {
+    if (wyb.pole) wyb.pole.setAttribute('aria-expanded', 'false');
+    listaWyboru.hidden = true;
+    listaWyboru.innerHTML = '';
+    wyb.pole = null;
+    wyb.opcje = [];
+    wyb.aktywna = -1;
+  }
+
+  function aktualizujOpis(pole) {
+    const opis = pole.closest('.pole') && $('.opis-wyboru', pole.closest('.pole'));
+    if (opis) opis.innerHTML = opisWyboru(pole.dataset.wybierak, pole.value, celPola(pole));
+  }
+
+  /** Wstawia wartość do pola tak, jakby wpisał ją użytkownik (zdarzenia input i change). */
+  function ustawPole(pole, wartosc) {
+    pole.value = wartosc;
+    aktualizujOpis(pole);
+    wyb.ustawiam = true;
+    try {
+      pole.dispatchEvent(new Event('input', { bubbles: true }));
+      pole.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally {
+      wyb.ustawiam = false;
+    }
+  }
+
+  function wybierzOpcje(i) {
+    const pole = wyb.pole;
+    const o = wyb.opcje[i];
+    zamknijListe();
+    if (!pole || !o) return;
+    const cel = celPola(pole);
+    const model = !!pole.dataset.model;
+    ustawPole(pole, o.w);
+    if (model) {
+      // po wyborze modelu od razu do następnego pola: lokalizacja (jeśli pusta), potem numery seryjne albo ilość
+      setTimeout(() => {
+        const nr = cel.split(':')[1];
+        const lok = $('[data-p="' + nr + ':lok"]');
+        const dalej = lok && !lok.value ? lok : $('[data-p="' + nr + ':snTekst"]') || $('[data-p="' + nr + ':ilosc"]');
+        if (dalej) dalej.focus();
+      }, 20);
+    }
+  }
+
+  function przesunAktywna(o) {
+    const n = wyb.opcje.length;
+    if (!n) return;
+    wyb.aktywna = (wyb.aktywna + o + n) % n;
+    $$('.opcja[data-i]', listaWyboru).forEach((el) => el.classList.toggle('aktywna', Number(el.dataset.i) === wyb.aktywna));
+    const akt = $('.opcja.aktywna', listaWyboru);
+    if (akt) akt.scrollIntoView({ block: 'nearest' });
+  }
+
+  function dodajZListy() {
+    const pole = wyb.pole;
+    if (!pole) return;
+    const dane = { zrodlo: pole.dataset.wybierak, cel: celPola(pole), tekst: pole.value };
+    zamknijListe();
+    AKCJE.dodajDoWybieraka({ dataset: dane }).catch((e) => toast(e.message, 'blad'));
+  }
+
+  listaWyboru.addEventListener('mousedown', (e) => {
+    e.preventDefault(); // pole zostaje aktywne
+    const o = e.target.closest('.opcja');
+    if (!o) return;
+    if (o.hasAttribute('data-dodaj')) return dodajZListy();
+    if (o.dataset.i !== undefined) wybierzOpcje(Number(o.dataset.i));
+  });
+  document.addEventListener('mousedown', (e) => {
+    const b = e.target.closest('[data-rozwin]');
+    if (!b) return;
+    e.preventDefault();
+    const pole = $('input', b.parentElement);
+    if (wyb.pole === pole) return zamknijListe();
+    pole.focus();
+    otworzListe(pole, false);
+  });
+  document.addEventListener('click', (e) => {
+    const pole = e.target.closest && e.target.closest('input[data-wybierak]');
+    if (pole && wyb.pole !== pole) otworzListe(pole, false);
+  });
+  document.addEventListener('input', (e) => {
+    const pole = e.target;
+    if (!pole.dataset || !pole.dataset.wybierak || wyb.ustawiam) return;
+    pole.dataset.pisze = '1';
+    otworzListe(pole, true);
+    aktualizujOpis(pole);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    const pole = e.target;
+    if (!pole.dataset || !pole.dataset.wybierak) return;
+    const otwarta = wyb.pole === pole;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!otwarta) otworzListe(pole, false);
+      else przesunAktywna(e.key === 'ArrowDown' ? 1 : -1);
+    } else if (e.key === 'Enter' && otwarta) {
+      if (wyb.aktywna >= 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        wybierzOpcje(wyb.aktywna);
+      } else if (!wyb.opcje.length && $('[data-dodaj]', listaWyboru)) {
+        e.preventDefault();
+        e.stopPropagation();
+        dodajZListy();
+      } else zamknijListe();
+    } else if (e.key === 'Escape' && otwarta) {
+      e.preventDefault();
+      e.stopPropagation(); // nie zamykaj okna dialogowego
+      zamknijListe();
+    } else if (e.key === 'Tab' && otwarta) zamknijListe();
+  }, true);
+  document.addEventListener('focusout', (e) => {
+    if (e.target === wyb.pole) setTimeout(() => { if (document.activeElement !== wyb.pole) zamknijListe(); }, 0);
+  });
+  document.addEventListener('scroll', (e) => { if (wyb.pole && !listaWyboru.contains(e.target)) ustawListe(); }, true);
+  window.addEventListener('resize', () => { if (wyb.pole) ustawListe(); });
+
+  /** Dodawanie nowej pozycji do listy (przycisk „Nowy” albo ostatni wiersz listy). Zwraca wartość do wstawienia w pole. */
+  const DODAJ = {
+    projekty: (t) => edytujProjekt(null, Object.assign(app.szkic && app.widok === 'dokument' ? { klientNazwa: app.szkic.klientNazwa || '', adres: app.szkic.adres || '' } : {}, /\d/.test(t) ? { numer: t } : { nazwa: t })),
+    dostawcy: (t) => edytujDostawce(null, { nazwa: t }),
+    klienci: (t) => edytujKlienta(null, { nazwa: t }),
+    modele: (t, cel) => edytujModel(null, cel.split(':')[1], { model: t }).then(() => null),
+  };
+
+  function ustawCel(cel, wartosc) {
+    const [typ, ...r] = cel.split(':');
+    if (typ === 'f' && app.szkic) {
+      app.szkic[r[0]] = wartosc;
+      if (r[0] === 'projekt') uzupelnijZProjektu();
+    } else if (typ === 'p' && app.szkic) {
+      const p = app.szkic.pozycje[Number(r[0])];
+      if (p) p[r[1]] = wartosc;
+    } else if (typ === 'filtr') app.filtr[r[0]] = wartosc;
+    else {
+      const el = $('#modal [name="' + r[0] + '"]');
+      if (el) ustawPole(el, wartosc);
+    }
+  }
+
+  /** Po wyborze projektu w wydaniu: klient i adres obiektu z rejestru projektów (jeśli pola są puste albo wypełnione automatycznie). */
+  function uzupelnijZProjektu() {
+    const s = app.szkic;
+    if (!s || s.rodzaj !== 'WZ') return;
+    const p = C.projektWgNumeru(app.st, s.projekt);
+    if (!p) return;
+    if (p.klientNazwa && (!C.norm(s.klientNazwa) || s.klientNazwa === s.autoKlient)) s.klientNazwa = s.autoKlient = p.klientNazwa;
+    if (p.adres && (!C.norm(s.adres) || s.adres === s.autoAdres)) s.adres = s.autoAdres = p.adres;
+  }
+
+  // Przerysowanie po zmianie pola dopiero po zakończeniu kliknięcia (żeby nie zgubić klikniętego przycisku).
+  let wcisniety = false;
+  let czekaRysowanie = false;
+  document.addEventListener('pointerdown', () => { wcisniety = true; }, true);
+  document.addEventListener('pointerup', () => {
+    wcisniety = false;
+    if (czekaRysowanie) { czekaRysowanie = false; setTimeout(render, 0); }
+  }, true);
+  function przerysujBezpiecznie() {
+    if (wcisniety) czekaRysowanie = true;
+    else setTimeout(render, 0);
+  }
+
   // ------------------------------------------------------------ formularze dokumentów
 
   function nowySzkic(rodzaj) {
@@ -710,13 +1121,6 @@
 
   function etykietaModelu(m) {
     return (m.producent ? m.producent + ' ' : '') + m.model + (m.pn ? ' · ' + m.pn : '');
-  }
-
-  function datalisty() {
-    const p = C.podpowiedzi(app.st);
-    const dl = (id, lista) => '<datalist id="' + id + '">' + lista.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist>';
-    const modele = Array.from(app.st.modele.values()).filter((m) => m.status !== 'wycofany').sort((a, b) => etykietaModelu(a).localeCompare(etykietaModelu(b), 'pl'));
-    return dl('dl-lok', p.lokalizacje) + dl('dl-proj', p.projekty) + dl('dl-kli', p.klienci) + dl('dl-dost', p.dostawcy) + dl('dl-prod', p.producenci) + dl('dl-model', modele.map(etykietaModelu));
   }
 
   function modelZEtykiety(tekst) {
@@ -739,12 +1143,12 @@
       naglowek = '<div class="siatka">' +
         pole('Data', wejscie('data', s.data, 'type="date"')) +
         (r === 'PZ'
-          ? pole('Dostawca *', wejscie('dostawca', s.dostawca, 'list="dl-dost" placeholder="nazwa dostawcy"'), '', 'dostawca') +
+          ? pole('Dostawca *', wybierak('dostawcy', 'f:dostawca', s.dostawca, { nowy: true, opis: true, placeholder: 'wybierz z listy – nazwa, NIP albo marka' }), 'szerokie-2', 'dostawca') +
             pole('Nr faktury lub WZ dostawcy', wejscie('nrFaktury', s.nrFaktury, 'placeholder="np. FV/2026/11/0815"'), '', 'nrFaktury') +
             '<div class="pole pole-projekt"><span>Kupione pod projekt ' + pomoc('podProjekt') + '</span>' +
               '<div class="wiersz-projekt"><label class="przelacznik"><input type="checkbox" data-f="podProjekt" data-przerysuj="1" ' + (s.podProjekt ? 'checked' : '') + '><span>tak</span></label>' +
-              (s.podProjekt ? wejscie('projekt', s.projekt, 'list="dl-proj" placeholder="numer projektu" class="wejscie-projekt"') : '<span class="szary maly">nie – towar trafi na wolny stan</span>') + '</div></div>'
-          : pole('Spisujący', wejscie('osoba', s.osoba || osoba(app.user.userId)))) +
+              (s.podProjekt ? '<div class="wejscie-projekt">' + wybierak('projekty', 'f:projekt', s.projekt, { nowy: true, opis: true, placeholder: 'numer albo nazwa projektu' }) + '</div>' : '<span class="szary maly">nie – towar trafi na wolny stan</span>') + '</div></div>'
+          : pole('Spisujący', wybierak('osoby', 'f:osoba', s.osoba || osoba(app.user.userId), { placeholder: 'imię i nazwisko' }))) +
         pole('Uwagi', wejscie('uwagi', s.uwagi), 'szerokie') +
         '</div>';
       pozycje = s.pozycje.map((p, i) => {
@@ -763,9 +1167,9 @@
         return '<div class="pozycja">' +
           '<div class="pozycja-nr">' + (i + 1) + '</div>' +
           '<div class="siatka">' +
-            pole('Model *', '<div class="wiersz-modelu"><input list="dl-model" data-p="' + i + ':modelLabel" data-model="1" value="' + esc(p.modelLabel || '') + '" placeholder="zacznij pisać: producent, model albo kod">' + (m ? przyciskKarty(m.modelId) : '') + '</div><small class="blad-tekst" data-podp="' + i + '"' + (C.norm(p.modelLabel) && !m ? '' : ' hidden') + '>Nie ma takiego modelu w kartotece. <a href="#" data-a="edytujModel" data-poz="' + i + '">Dodaj go</a></small>', 'szerokie') +
-            pole('Lokalizacja *', '<input list="dl-lok" data-p="' + i + ':lok" value="' + esc(p.lok || '') + '" placeholder="np. Regał A, półka 2">', '', 'lokalizacja') +
-            (r === 'BO' ? pole('Kupione pod projekt', '<input list="dl-proj" data-p="' + i + ':projekt" value="' + esc(p.projekt || '') + '" placeholder="puste = wolny stan">', '', 'podProjekt') : '') +
+            pole('Model *', '<div class="wiersz-modelu">' + wybierak('modele', 'p:' + i + ':modelLabel', p.modelLabel || '', { nowy: true, atr: 'data-model="1"', placeholder: 'zacznij pisać: producent, model albo kod', nowyTip: 'Dodaj nowy model do kartoteki' }) + (m ? przyciskKarty(m.modelId) : '') + '</div><small class="blad-tekst" data-podp="' + i + '"' + (C.norm(p.modelLabel) && !m ? '' : ' hidden') + '>Nie ma takiego modelu w kartotece. <a href="#" data-a="edytujModel" data-poz="' + i + '">Dodaj go</a></small>', 'szerokie') +
+            pole('Lokalizacja *', wybierak('lokalizacje', 'p:' + i + ':lok', p.lok || '', { opis: true, placeholder: 'np. Regał A, półka 2' }), '', 'lokalizacja') +
+            (r === 'BO' ? pole('Kupione pod projekt', wybierak('projekty', 'p:' + i + ':projekt', p.projekt || '', { opis: true, placeholder: 'puste = wolny stan' }), '', 'podProjekt') : '') +
             szczeg +
           '</div>' +
           '<button class="ikonowy" data-a="usunPoz" data-i="' + i + '" data-tip="Usuń pozycję" aria-label="Usuń pozycję">' + ikona('x') + '</button>' +
@@ -776,32 +1180,32 @@
       const zast = s.pozycje.some((p) => C.czyZastepcze(p.projektZakupu, s.projekt));
       naglowek = '<div class="siatka">' +
         pole('Data', wejscie('data', s.data, 'type="date"')) +
-        pole('Numer projektu *', wejscie('projekt', s.projekt, 'list="dl-proj" placeholder="wpisz numer projektu" data-przerysuj-po="1"'), '', 'projektNumer') +
-        pole('Klient *', wejscie('klientNazwa', s.klientNazwa, 'list="dl-kli" placeholder="wybierz z listy albo wpisz"'), '', 'klient') +
-        pole('Adres obiektu', wejscie('adres', s.adres, 'placeholder="dokąd jedzie sprzęt"'), '', 'adresObiektu') +
-        pole('Pobierający', wejscie('osoba', s.osoba, 'placeholder="imię i nazwisko"'), '', 'pobierajacy') +
+        pole('Projekt *', wybierak('projekty', 'f:projekt', s.projekt, { nowy: true, opis: true, atr: 'data-przerysuj-po="1"', placeholder: 'wpisz numer albo nazwę projektu' }), 'szerokie-2', 'projektNumer') +
+        pole('Klient *', wybierak('klienci', 'f:klientNazwa', s.klientNazwa, { nowy: true, opis: true, placeholder: 'wybierz z listy albo wpisz' }), 'szerokie-2', 'klient') +
+        pole('Adres obiektu', wybierak('adresy', 'f:adres', s.adres, { placeholder: 'dokąd jedzie sprzęt' }), 'szerokie-2', 'adresObiektu') +
+        pole('Pobierający', wybierak('osoby', 'f:osoba', s.osoba, { placeholder: 'imię i nazwisko' }), '', 'pobierajacy') +
         pole('Uwagi', wejscie('uwagi', s.uwagi)) +
         '</div>' +
         (zast ? '<div class="alert wzz-alert"><b>WYDANIE ZASTĘPCZE (WZZ)</b><br>Część sprzętu kupiono pod inny projekt. Dokument zostanie zapisany jako WZZ, na wydruku pojawi się czerwona ramka, a sprzęt trafi na listę „Do uzupełnienia”.' + pole('Powód wydania zastępczego *', '<textarea data-f="powod" rows="2" placeholder="dlaczego wydajesz sprzęt z innego projektu?">' + esc(s.powod) + '</textarea>', 'szerokie', 'powodWzz') + '</div>' : '');
       pozycje = (s.pozycje.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Model</th><th>Nr seryjny</th><th>Z lokalizacji</th><th>Kupione pod</th><th class="l">Ilość</th><th></th></tr></thead><tbody>' +
-        s.pozycje.map((p, i) => '<tr class="' + (C.czyZastepcze(p.projektZakupu, s.projekt) ? 'wzz' : '') + '"><td>' + esc(nazwaModelu(p.modelId)) + przyciskKarty(p.modelId) + '</td><td class="mono">' + esc(p.sn || '') + '</td><td>' + esc(p.lok) + '</td><td>' + (p.projektZakupu ? '<span class="znaczek ' + (C.czyZastepcze(p.projektZakupu, s.projekt) ? 'brak' : 'projekt') + '">' + esc(p.projektZakupu) + '</span>' : '<span class="szary">wolny stan</span>') + '</td><td class="l">' + (p.sn ? '1 szt.' : '<input class="w-ilosc" data-p="' + i + ':ilosc" value="' + esc(p.ilosc) + '" inputmode="decimal" placeholder="0"> ' + esc(jedn(p.modelId)) + ' <small class="szary">z ' + fmtL(p.max) + '</small>') + '</td><td><button class="ikonowy" data-a="usunPoz" data-i="' + i + '" data-tip="Usuń z dokumentu" aria-label="Usuń">' + ikona('x') + '</button></td></tr>').join('') +
+        s.pozycje.map((p, i) => '<tr class="' + (C.czyZastepcze(p.projektZakupu, s.projekt) ? 'wzz' : '') + '"><td>' + esc(nazwaModelu(p.modelId)) + przyciskKarty(p.modelId) + '</td><td class="mono">' + esc(p.sn || '') + '</td><td>' + esc(p.lok) + '</td><td>' + (p.projektZakupu ? znaczekProj(p.projektZakupu, C.czyZastepcze(p.projektZakupu, s.projekt) ? 'brak' : 'projekt') : '<span class="szary">wolny stan</span>') + '</td><td class="l">' + (p.sn ? '1 szt.' : '<input class="w-ilosc" data-p="' + i + ':ilosc" value="' + esc(p.ilosc) + '" inputmode="decimal" placeholder="0"> ' + esc(jedn(p.modelId)) + ' <small class="szary">z ' + fmtL(p.max) + '</small>') + '</td><td><button class="ikonowy" data-a="usunPoz" data-i="' + i + '" data-tip="Usuń z dokumentu" aria-label="Usuń">' + ikona('x') + '</button></td></tr>').join('') +
         '</tbody></table></div>' : '<div class="pusto">Wybierz sprzęt z magazynu poniżej</div>') + wyborZMagazynu(s);
     } else if (r === 'ZW') {
       naglowek = '<div class="siatka">' +
         pole('Data', wejscie('data', s.data, 'type="date"')) +
-        pole('Numer projektu *', wejscie('projekt', s.projekt, 'list="dl-proj" placeholder="z jakiego projektu wraca sprzęt" data-przerysuj-po="1"'), '', 'projektNumer') +
-        pole('Zwracający', wejscie('osoba', s.osoba, 'placeholder="imię i nazwisko"')) +
+        pole('Projekt *', wybierak('projekty', 'f:projekt', s.projekt, { opis: true, atr: 'data-przerysuj-po="1"', placeholder: 'z jakiego projektu wraca sprzęt – numer albo nazwa' }), 'szerokie-2', 'projektNumer') +
+        pole('Zwracający', wybierak('osoby', 'f:osoba', s.osoba, { placeholder: 'imię i nazwisko' })) +
         pole('Uwagi', wejscie('uwagi', s.uwagi)) +
         '</div>';
       pozycje = (s.pozycje.length ? s.pozycje.map((p, i) => '<div class="pozycja"><div class="pozycja-nr">' + (i + 1) + '</div><div class="siatka">' +
         '<div class="pole szerokie"><span>Model</span><div><b>' + esc(nazwaModelu(p.modelId)) + '</b>' + (p.sn ? ' · nr seryjny <span class="mono">' + esc(p.sn) + '</span>' : '') + '</div></div>' +
         (p.sn ? pole('Stan po zwrocie', wyborStanu(i, p.stanTech), '', 'stanTech') : pole('Ilość (wydano ' + fmtL(p.max) + ' ' + esc(jedn(p.modelId)) + ')', '<input data-p="' + i + ':ilosc" value="' + esc(p.ilosc) + '" inputmode="decimal" placeholder="0">')) +
-        pole('Lokalizacja *', '<input list="dl-lok" data-p="' + i + ':lok" value="' + esc(p.lok || '') + '" placeholder="gdzie odkładasz">', '', 'lokalizacja') +
+        pole('Lokalizacja *', wybierak('lokalizacje', 'p:' + i + ':lok', p.lok || '', { opis: true, placeholder: 'gdzie odkładasz' }), '', 'lokalizacja') +
         '</div><button class="ikonowy" data-a="usunPoz" data-i="' + i + '" data-tip="Usuń pozycję" aria-label="Usuń">' + ikona('x') + '</button></div>').join('') : '<div class="pusto">Wybierz poniżej, co wraca z projektu</div>') + wyborZwrotu(s);
     }
     const tytuly = { PZ: 'Przyjęcie zewnętrzne (PZ)', BO: 'Bilans otwarcia (BO)', WZ: 'Wydanie na projekt (WZ / WZZ)', ZW: 'Zwrot z projektu (ZW)' };
     const podt = { PZ: 'Dostawa od dostawcy. Zaznacz projekt, jeśli towar kupiono pod konkretny projekt.', BO: 'Inwentaryzacja startowa: wpisz wszystko, co fizycznie leży w magazynie, miejsce po miejscu.', WZ: 'Sprzęt jedzie do klienta. Jeśli wybierzesz sprzęt kupiony pod inny projekt, powstanie wydanie zastępcze (WZZ).', ZW: 'Nadwyżki materiału i niewykorzystane urządzenia wracające z projektu.' };
-    return datalisty() + '<button class="przycisk tekstowy wstecz" data-a="wstecz">← Wróć</button>' + naglowekWidoku(tytuly[r], podt[r], '<button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny" data-a="zapiszSzkic">Zapisz i drukuj</button>', r) +
+    return '<button class="przycisk tekstowy wstecz" data-a="wstecz">← Wróć</button>' + naglowekWidoku(tytuly[r], podt[r], '<button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny" data-a="zapiszSzkic">Zapisz i drukuj</button>', r) +
       '<section class="karta"><h2>Dane dokumentu</h2>' + naglowek + '</section>' +
       '<section class="karta"><h2>Pozycje' + (s.pozycje.length ? ' <span class="licznik-pozycji">' + s.pozycje.length + '</span>' : '') + '</h2>' + pozycje + '</section>' +
       '<div class="stopka-formularza"><button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny duzy" data-a="zapiszSzkic">Zapisz dokument (PIN) i drukuj</button></div>';
@@ -815,22 +1219,22 @@
     const ranga = (w) => (!w.projekt ? 1 : C.normKlucz(w.projekt) === proj ? 0 : 2);
     const lista = C.wierszeMagazynu(app.st)
       .filter((w) => !(w.sn && wybrane.has(C.kluczEgz(w.modelId, w.sn))))
-      .filter((w) => pasuje('wybor', nazwaModelu(w.modelId), model(w.modelId).pn, w.sn, w.lok, w.projekt))
+      .filter((w) => pasuje('wybor', nazwaModelu(w.modelId), model(w.modelId).pn, w.sn, w.lok, w.projekt, projNazwa(w.projekt)))
       .sort((a, b) => ranga(a) - ranga(b) || (nazwaModelu(a.modelId) + a.lok + a.sn).localeCompare(nazwaModelu(b.modelId) + b.lok + b.sn, 'pl'));
     return '<h3 class="odstep-gora">Dostępne w magazynie ' + pomoc('wyborZMagazynu') + '</h3><div class="filtry">' + poleSzukaj('wybor', 'Szukaj: model, kod, numer seryjny, lokalizacja…') + '</div>' +
       (lista.length ? '<div class="tabela-owijka wysokosc"><table class="tabela"><thead><tr><th>Model</th><th>Nr seryjny</th><th>Lokalizacja</th><th>Kupione pod</th><th class="l">Dostępne</th><th></th></tr></thead><tbody>' +
         lista.slice(0, 200).map((w) => {
           const juz = wykorzystane.get(w.modelId + '|' + w.lok + '|' + (w.projekt || '')) || 0;
           const zast = C.czyZastepcze(w.projekt, s.projekt);
-          return '<tr class="' + (zast ? 'inny-projekt' : '') + '"><td>' + esc(nazwaModelu(w.modelId)) + przyciskKarty(w.modelId) + '</td><td class="mono">' + esc(w.sn) + '</td><td>' + esc(w.lok) + '</td><td>' + (w.projekt ? '<span class="znaczek ' + (zast ? 'brak' : 'projekt') + '">' + esc(w.projekt) + '</span>' : '<span class="szary">wolny stan</span>') + '</td><td class="l">' + fmtIl(w.modelId, w.ilosc - juz) + '</td><td class="akcje-wiersza"><button class="przycisk maly ' + (zast ? 'czerwony' : '') + '" data-a="dodajZMagazynu" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-lok="' + esc(w.lok) + '" data-p="' + esc(w.projekt) + '" data-il="' + w.ilosc + '" ' + (w.ilosc - juz <= 0 ? 'disabled' : '') + '>Dodaj</button></td></tr>';
+          return '<tr class="' + (zast ? 'inny-projekt' : '') + '"><td>' + esc(nazwaModelu(w.modelId)) + przyciskKarty(w.modelId) + '</td><td class="mono">' + esc(w.sn) + '</td><td>' + esc(w.lok) + '</td><td>' + (w.projekt ? znaczekProj(w.projekt, zast ? 'brak' : 'projekt') : '<span class="szary">wolny stan</span>') + '</td><td class="l">' + fmtIl(w.modelId, w.ilosc - juz) + '</td><td class="akcje-wiersza"><button class="przycisk maly ' + (zast ? 'czerwony' : '') + '" data-a="dodajZMagazynu" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-lok="' + esc(w.lok) + '" data-p="' + esc(w.projekt) + '" data-il="' + w.ilosc + '" ' + (w.ilosc - juz <= 0 ? 'disabled' : '') + '>Dodaj</button></td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="pusto">Brak sprzętu pasującego do wyszukiwania</div>');
   }
 
   function wyborZwrotu(s) {
-    if (!C.norm(s.projekt)) return '<div class="alert info odstep-gora">Wpisz numer projektu, a pokażę, co zostało na niego wydane.</div>';
+    if (!C.norm(s.projekt)) return '<div class="alert info odstep-gora">Wybierz projekt, a pokażę, co zostało na niego wydane.</div>';
     const wybrane = new Set(s.pozycje.map((p) => p.modelId + '|' + (p.sn || '')));
     const lista = C.wydaneNaProjekt(app.st, s.projekt).filter((w) => !wybrane.has(w.modelId + '|' + (w.sn || '')));
-    return '<h3 class="odstep-gora">Wydane na projekt ' + esc(s.projekt) + '</h3>' +
+    return '<h3 class="odstep-gora">Wydane na projekt ' + esc(projTekst(s.projekt)) + '</h3>' +
       (lista.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Model</th><th>Nr seryjny</th><th>Klient</th><th class="l">Wydano</th><th></th></tr></thead><tbody>' +
         lista.map((w) => '<tr><td>' + esc(nazwaModelu(w.modelId)) + '</td><td class="mono">' + esc(w.sn) + '</td><td>' + esc(w.klient) + '</td><td class="l">' + fmtIl(w.modelId, w.ilosc) + '</td><td class="akcje-wiersza"><button class="przycisk maly" data-a="dodajZwrot" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-il="' + w.ilosc + '">Dodaj</button></td></tr>').join('') +
         '</tbody></table></div>' : '<div class="pusto">Nic nie zostało wydane na ten projekt (albo już wróciło)</div>');
@@ -867,7 +1271,11 @@
     let rodzaj = s.rodzaj;
     if (rodzaj === 'WZ' && pozycje.some((p) => C.czyZastepcze(p.projektZakupu, s.projekt))) rodzaj = 'WZZ';
     const dane = { rodzaj, data: s.data || dzis(), uwagi: C.norm(s.uwagi), osoba: C.norm(s.osoba), pozycje };
-    if (rodzaj === 'PZ') Object.assign(dane, { dostawca: C.norm(s.dostawca), nrFaktury: C.norm(s.nrFaktury), projekt: s.podProjekt ? C.norm(s.projekt) : '' });
+    if (rodzaj === 'PZ') {
+      Object.assign(dane, { dostawca: C.norm(s.dostawca), nrFaktury: C.norm(s.nrFaktury), projekt: s.podProjekt ? C.norm(s.projekt) : '' });
+      const dost = C.dostawcaWgNazwy(app.st, dane.dostawca);
+      if (dost) Object.assign(dane, { dostawca: dost.nazwa, dostawcaId: dost.dostawcaId, dostawcaDane: { pelnaNazwa: dost.pelnaNazwa || '', nip: dost.nip || '', adres: dost.adres || '' } });
+    }
     if (rodzaj === 'BO') dane.osoba = dane.osoba || osoba(app.user.userId);
     if (rodzaj === 'WZ' || rodzaj === 'WZZ') {
       Object.assign(dane, { projekt: C.norm(s.projekt), klientNazwa: C.norm(s.klientNazwa), adres: C.norm(s.adres) });
@@ -885,15 +1293,22 @@
     const nowe = [];
     const lok = new Set(pozycje.map((x) => x.lok).filter(Boolean));
     for (const l of lok) if (C.czyNowaWartosc(p.lokalizacje, l)) nowe.push('lokalizacja „' + l + '”');
-    const projekty = new Set([dane.projekt].concat(pozycje.map((x) => x.projekt)).filter(Boolean));
-    for (const pr of projekty) if (C.czyNowaWartosc(p.projekty, pr)) nowe.push('projekt „' + pr + '”');
     if (dane.klientNazwa && C.czyNowaWartosc(p.klienci, dane.klientNazwa)) nowe.push('klient „' + dane.klientNazwa + '”');
-    if (nowe.length && rodzaj !== 'BO' || nowe.length && rodzaj === 'BO' && nowe.some((n) => n.startsWith('projekt') || n.startsWith('klient'))) {
+    if (rodzaj === 'PZ' && !dane.dostawcaId && C.czyNowaWartosc(p.dostawcy, dane.dostawca)) nowe.push('dostawca „' + dane.dostawca + '” (spoza biblioteki dostawców)');
+    if (nowe.length && rodzaj !== 'BO') {
       const ok = await potwierdz('Nowe wartości', 'Te wartości pojawią się po raz pierwszy:<br><b>' + nowe.map(esc).join('<br>') + '</b><br><br>Sprawdź, czy nie ma literówki (np. „A3” i „A-3” to dwa różne miejsca).', 'Wszystko się zgadza');
       if (!ok) return;
     }
+    // nowy numer projektu – od razu pytamy o nazwę
+    const projekty = new Set([dane.projekt].concat(pozycje.map((x) => x.projekt)).filter(Boolean));
+    for (const pr of projekty) {
+      if (!C.czyNowaWartosc(p.projekty, pr)) continue;
+      const w = await edytujProjekt(null, { numer: pr, klientNazwa: dane.klientNazwa || '', adres: dane.adres || '' }, { przyZapisie: true });
+      if (!w) return;
+    }
+    if (dane.projekt && C.nazwaProjektu(app.st, dane.projekt)) dane.projektNazwa = C.nazwaProjektu(app.st, dane.projekt);
     if (rodzaj === 'WZZ') {
-      const ok = await potwierdz('Wydanie zastępcze', '<span class="czerwony-tekst"><b>Ten dokument zawiera sprzęt kupiony pod inny projekt.</b></span><br>' + pozycje.filter((x) => C.czyZastepcze(x.projektZakupu, dane.projekt)).map((x) => esc(nazwaModelu(x.modelId) + (x.sn ? ' SN ' + x.sn : ' ' + x.ilosc + ' ' + jedn(x.modelId)) + ': kupione pod ' + x.projektZakupu)).join('<br>') + '<br><br>Wydajesz go na projekt <b>' + esc(dane.projekt) + '</b>. Sprzęt trafi na listę „Do uzupełnienia”.', 'Rozumiem, wydaję zastępczo', 'czerwony');
+      const ok = await potwierdz('Wydanie zastępcze', '<span class="czerwony-tekst"><b>Ten dokument zawiera sprzęt kupiony pod inny projekt.</b></span><br>' + pozycje.filter((x) => C.czyZastepcze(x.projektZakupu, dane.projekt)).map((x) => esc(nazwaModelu(x.modelId) + (x.sn ? ' SN ' + x.sn : ' ' + x.ilosc + ' ' + jedn(x.modelId)) + ': kupione pod ' + projTekst(x.projektZakupu))).join('<br>') + '<br><br>Wydajesz go na projekt <b>' + esc(projTekst(dane.projekt)) + '</b>. Sprzęt trafi na listę „Do uzupełnienia”.', 'Rozumiem, wydaję zastępczo', 'czerwony');
       if (!ok) return;
     }
     if (!(await pytajPin('Zapisujesz dokument ' + C.RODZAJE[rodzaj].nazwa + ' (' + pozycje.length + ' poz.).'))) return;
@@ -917,9 +1332,11 @@
     const d = wpis.ev.dane;
     const naglowekInfo = [
       ['Data', fmtData(d.data || wpis.ev.ts)], ['Wystawił', osoba(wpis.ev.autor) + ' · ' + fmtCzas(wpis.ev.ts)],
-      d.projekt ? [d.rodzaj === 'PZ' || d.rodzaj === 'BO' ? 'Pod projekt' : 'Projekt', d.projekt] : null,
+      d.projekt ? [d.rodzaj === 'PZ' || d.rodzaj === 'BO' ? 'Pod projekt' : 'Projekt', d.projekt + ((d.projektNazwa || projNazwa(d.projekt)) ? ' – ' + (d.projektNazwa || projNazwa(d.projekt)) : '')] : null,
       d.klientNazwa ? ['Klient', d.klientNazwa + (d.klientNip ? ' · NIP ' + d.klientNip : '')] : null,
-      d.adres ? ['Adres obiektu', d.adres] : null, d.dostawca ? ['Dostawca', d.dostawca] : null, d.nrFaktury ? ['Faktura / WZ dostawcy', d.nrFaktury] : null,
+      d.adres ? ['Adres obiektu', d.adres] : null,
+      d.dostawca ? ['Dostawca', d.dostawca + (d.dostawcaDane ? [d.dostawcaDane.pelnaNazwa && d.dostawcaDane.pelnaNazwa !== d.dostawca ? d.dostawcaDane.pelnaNazwa : '', d.dostawcaDane.nip ? 'NIP ' + d.dostawcaDane.nip : '', d.dostawcaDane.adres].filter(Boolean).map((x) => ' · ' + x).join('') : '')] : null,
+      d.nrFaktury ? ['Faktura / WZ dostawcy', d.nrFaktury] : null,
       d.osoba ? [d.rodzaj === 'WZ' || d.rodzaj === 'WZZ' ? 'Pobierający' : d.rodzaj === 'ZW' ? 'Zwracający' : 'Osoba', d.osoba] : null, d.uwagi ? ['Uwagi', d.uwagi] : null,
     ].filter(Boolean);
     const tresc =
@@ -1024,8 +1441,9 @@
     }[r];
     const meta = [
       ['Data', fmtData(d.data || ev.ts)],
-      r === 'PZ' ? ['Dostawca', d.dostawca] : null, r === 'PZ' && d.nrFaktury ? ['Faktura / WZ dostawcy', d.nrFaktury] : null,
-      d.projekt ? [r === 'PZ' || r === 'BO' ? 'Kupione pod projekt' : r === 'ZW' ? 'Zwrot z projektu' : 'Projekt', d.projekt] : null,
+      r === 'PZ' ? ['Dostawca', d.dostawcaDane && d.dostawcaDane.pelnaNazwa ? d.dostawcaDane.pelnaNazwa + (d.dostawcaDane.nip ? ', NIP ' + d.dostawcaDane.nip : '') + (d.dostawcaDane.adres ? ', ' + d.dostawcaDane.adres : '') : d.dostawca] : null,
+      r === 'PZ' && d.nrFaktury ? ['Faktura / WZ dostawcy', d.nrFaktury] : null,
+      d.projekt ? [r === 'PZ' || r === 'BO' ? 'Kupione pod projekt' : r === 'ZW' ? 'Zwrot z projektu' : 'Projekt', d.projekt + ((d.projektNazwa || projNazwa(d.projekt)) ? ' – ' + (d.projektNazwa || projNazwa(d.projekt)) : '')] : null,
       d.klientNazwa ? ['Klient', d.klientNazwa + (d.klientNip ? ', NIP ' + d.klientNip : '') + (d.klientAdres ? ', ' + d.klientAdres : '')] : null,
       d.adres ? ['Adres obiektu', d.adres] : null,
       ['Wystawił', osoba(ev.autor) + ' (potwierdzone PIN-em, ' + fmtCzas(ev.ts) + ')'],
@@ -1064,19 +1482,25 @@
     return 'https://www.google.com/search?q=' + encodeURIComponent(q + ' karta katalogowa datasheet pdf');
   }
 
-  async function edytujModel(id, poz) {
-    const m = id ? app.st.modele.get(id) : { kategoria: '', producent: '', model: '', pn: '', ean: '', seryjny: true, jednostka: 'szt', jednostkaZakupu: '', przelicznik: '', stanMin: '', status: 'aktywny', link: '', kartaPlik: '' };
-    const uzyty = id && Array.from(app.st.dokumenty.values()).some((w) => (w.ev.dane.pozycje || []).some((p) => p.modelId === id));
+  async function edytujModel(id, poz, wstepne) {
     const p = C.podpowiedzi(app.st);
+    const w0 = Object.assign({}, wstepne || {});
+    if (w0.model && !w0.producent) {
+      // „samsung qm55c” → producent Samsung, model QM55C
+      const slowa = C.norm(w0.model).split(/\s+/);
+      const prod = p.producenci.find((x) => C.normKlucz(x) === C.normKlucz(slowa[0]));
+      if (prod && slowa.length > 1) Object.assign(w0, { producent: prod, model: slowa.slice(1).join(' ') });
+    }
+    const m = id ? app.st.modele.get(id) : Object.assign({ kategoria: '', producent: '', model: '', pn: '', ean: '', seryjny: true, jednostka: 'szt', jednostkaZakupu: '', przelicznik: '', stanMin: '', status: 'aktywny', link: '', kartaPlik: '' }, w0);
+    const uzyty = id && Array.from(app.st.dokumenty.values()).some((w) => (w.ev.dane.pozycje || []).some((p) => p.modelId === id));
     let nowyPlik = null;
     let usunPlik = false;
     const wynik = await dialog({
       tytul: id ? 'Edycja modelu' : 'Nowy model w kartotece',
       szeroki: true,
-      tresc: '<datalist id="dl-prod2">' + p.producenci.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
-        '<h3 class="sekcja">Opis</h3><div class="siatka">' +
+      tresc: '<h3 class="sekcja">Opis</h3><div class="siatka">' +
         pole('Kategoria *', '<select name="kategoria">' + C.KATEGORIE.map((k) => '<option ' + (k === m.kategoria ? 'selected' : '') + '>' + esc(k) + '</option>').join('') + '</select>') +
-        pole('Producent', '<input name="producent" list="dl-prod2" value="' + esc(m.producent) + '" placeholder="np. Samsung">') +
+        pole('Producent', wybierak('producenci', 'n:producent', m.producent, { placeholder: 'np. Samsung' })) +
         pole('Model lub nazwa *', '<input name="model" value="' + esc(m.model) + '" placeholder="np. QM55C">', 'szerokie') +
         pole('Kod producenta (P/N)', '<input name="pn" value="' + esc(m.pn) + '">') +
         pole('EAN', '<input name="ean" value="' + esc(m.ean) + '" inputmode="numeric">') +
@@ -1214,20 +1638,258 @@
     else toast('Ten model nie ma karty katalogowej – dodaj ją w kartotece', 'blad');
   }
 
-  async function edytujKlienta(id) {
-    const k = id ? app.st.klienci.get(id) : { nazwa: '', nip: '', adres: '', kontakt: '', tel: '', email: '' };
+  // ------------------------------------------------------------ dane firm z rejestru (Biała lista VAT)
+
+  /** „UL. GRANICZNA 19, 05-092 ŁOMIANKI” → „ul. Graniczna 19, 05-092 Łomianki”. */
+  function ladnyAdres(a) {
+    return String(a || '').toLowerCase().replace(/(^|[\s,("\-/])(\p{L})/gu, (m, p, l) => p + l.toUpperCase())
+      .replace(/(\d)(\p{Ll})(?!\p{L})/gu, (m, c, l) => c + l.toUpperCase()) // 26a → 26A
+      .replace(/(^|\s)(Ul|Al|Pl|Os|Ks|Gen)\./g, (m, p, w) => p + w.toLowerCase() + '.');
+  }
+
+  /** Nazwa skrócona z pełnej nazwy rejestrowej: „„APLAUZ” SPÓŁKA Z OGRANICZONĄ…” → „Aplauz”. */
+  function skrotNazwy(pelna) {
+    const bez = String(pelna || '').replace(/[„”"'«»]/g, ' ')
+      .replace(/\b(SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ|SP\.? Z O\.? ?O\.?|SPÓŁKA AKCYJNA|S\.A\.|SPÓŁKA KOMANDYTOWA|SP\.? K\.|SPÓŁKA JAWNA|SP\.? J\.|SPÓŁKA CYWILNA|S\.C\.)(?=\s|$)/giu, ' ')
+      .replace(/\s+/g, ' ').trim();
+    return bez.split(' ').map((w) => (/^[\p{Lu}\d&.-]{1,3}$/u.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(' ');
+  }
+
+  /** NIP: polski zapisujemy jako 10 cyfr, zagraniczny (np. DE…) zostawiamy jak jest. */
+  function normNip(v) {
+    const t = C.norm(v).toUpperCase().replace(/[\s-]/g, '');
+    if (/^(PL)?\d{10}$/.test(t)) return t.replace(/^PL/, '');
+    return t;
+  }
+
+  class BladRejestru extends Error {
+    constructor(tekst, html) {
+      super(tekst);
+      this.html = html || esc(tekst);
+    }
+  }
+
+  /** Pobiera dane firmy z publicznego wykazu podatników VAT Ministerstwa Finansów. */
+  async function pobierzZRejestru(nip) {
+    const c = normNip(nip);
+    if (!/^\d{10}$/.test(c) || !C.poprawnyNip(c)) throw new BladRejestru('Wpisz poprawny polski NIP (10 cyfr).');
+    let odp;
+    try {
+      odp = await fetch('https://wl-api.mf.gov.pl/api/search/nip/' + c + '?date=' + dzis(), { headers: { Accept: 'application/json' } });
+    } catch (e) {
+      throw new BladRejestru('Brak połączenia z wykazem podatników VAT.', 'Nie udało się połączyć z wykazem podatników VAT (brak internetu albo połączenie zablokowała sieć firmowa). Dane sprawdzisz ręcznie w <a href="https://www.podatki.gov.pl/wykaz-podatnikow-vat-wyszukiwarka" target="_blank" rel="noopener">wyszukiwarce Ministerstwa Finansów</a>.');
+    }
+    let j = null;
+    try { j = await odp.json(); } catch (e) { /* pusta odpowiedź */ }
+    if (!odp.ok) throw new BladRejestru('Wykaz podatników VAT odpowiedział błędem' + (j && j.message ? ': ' + j.message : ' (' + odp.status + ')') + '. Spróbuj za chwilę.');
+    const s = j && j.result && j.result.subject;
+    if (!s) throw new BladRejestru('Nie znaleziono firmy o NIP ' + c + ' w wykazie podatników VAT (może nie być czynnym podatnikiem VAT). Wpisz dane ręcznie.');
+    return { pelnaNazwa: C.norm(s.name), nip: C.norm(s.nip) || c, regon: C.norm(s.regon), krs: C.norm(s.krs), adres: ladnyAdres(s.workingAddress || s.residenceAddress || ''), statusVat: C.norm(s.statusVat) };
+  }
+
+  const poleNip = (wartosc) => pole('NIP', '<div class="wiersz-linku"><input name="nip" value="' + esc(wartosc || '') + '" inputmode="numeric" placeholder="10 cyfr" autocomplete="off"><button type="button" class="przycisk" data-rejestr data-tip="' + esc(P.TIPY.bialaLista) + '">' + ikona('pobierz') + 'Pobierz z rejestru</button></div><small class="info-nip" data-nip-info></small>', 'szerokie', 'nip');
+
+  /** Sprawdzanie NIP w trakcie pisania i przycisk „Pobierz z rejestru” w oknie klienta lub dostawcy. */
+  function podlaczRejestr(f, naPobrane) {
+    const info = $('[data-nip-info]', f);
+    const sprawdz = () => {
+      const v = C.norm(f.nip.value);
+      if (!v) info.innerHTML = '';
+      else if (/^(PL)?[\d\s-]+$/i.test(v)) info.innerHTML = C.poprawnyNip(v) ? '<span class="ok-tekst">✓ poprawny NIP</span> – kliknij „Pobierz z rejestru”, żeby uzupełnić nazwę i adres.' : '<span class="blad-tekst" style="display:inline">nieprawidłowy NIP – sprawdź cyfry</span>';
+      else info.textContent = 'NIP zagraniczny – bez sprawdzania sumy kontrolnej.';
+    };
+    f.nip.addEventListener('input', sprawdz);
+    sprawdz();
+    f.addEventListener('click', async (e) => {
+      const krs = e.target.closest('[data-krs]');
+      if (krs) {
+        e.preventDefault();
+        const k = C.cyfry(f.krs.value);
+        if (!k) return toast('Najpierw wpisz numer KRS', 'blad');
+        window.open('https://rejestr.io/krs/' + Number(k), '_blank', 'noopener');
+        return;
+      }
+      const b = e.target.closest('[data-rejestr]');
+      if (!b) return;
+      e.preventDefault();
+      const etykieta = b.innerHTML;
+      b.disabled = true;
+      b.textContent = 'Pobieram…';
+      try {
+        const d = await pobierzZRejestru(f.nip.value);
+        f.nip.value = d.nip;
+        naPobrane(d);
+        info.innerHTML = '<span class="ok-tekst">✓ Pobrano z wykazu podatników VAT</span>' + (d.statusVat ? ' · status VAT: ' + esc(d.statusVat.toLowerCase()) : '') + ' · sprawdź i zapisz.';
+      } catch (err) {
+        info.innerHTML = '<span class="blad-tekst" style="display:inline">' + (err.html || esc(err.message)) + '</span>';
+      } finally {
+        b.disabled = false;
+        b.innerHTML = etykieta;
+      }
+    });
+  }
+
+  async function edytujKlienta(id, wstepne) {
+    const k = id ? app.st.klienci.get(id) : Object.assign({ nazwa: '', nip: '', adres: '', kontakt: '', tel: '', email: '' }, wstepne || {});
     const w = await dialog({
       tytul: id ? 'Edycja klienta' : 'Nowy klient', szeroki: true,
-      tresc: '<div class="siatka">' + pole('Nazwa firmy *', '<input name="nazwa" value="' + esc(k.nazwa) + '">', 'szerokie') + pole('NIP', '<input name="nip" value="' + esc(k.nip) + '">') + pole('Adres', '<input name="adres" value="' + esc(k.adres) + '">', 'szerokie') + pole('Osoba kontaktowa', '<input name="kontakt" value="' + esc(k.kontakt) + '">') + pole('Telefon', '<input name="tel" value="' + esc(k.tel) + '">') + pole('E-mail', '<input name="email" value="' + esc(k.email) + '">') + '</div>',
-      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz', klasa: 'glowny', submit: true }],
+      tresc: '<div class="siatka">' + poleNip(k.nip) + pole('Nazwa firmy *', '<input name="nazwa" value="' + esc(k.nazwa) + '">', 'szerokie') + pole('Adres', '<input name="adres" value="' + esc(k.adres) + '">', 'szerokie') + pole('Osoba kontaktowa', '<input name="kontakt" value="' + esc(k.kontakt) + '">') + pole('Telefon', '<input name="tel" value="' + esc(k.tel) + '">') + pole('E-mail', '<input name="email" value="' + esc(k.email) + '">') + '</div>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz klienta', klasa: 'glowny', submit: true }],
+      przyOtwarciu: (f) => podlaczRejestr(f, (d) => {
+        if (!C.norm(f.nazwa.value)) f.nazwa.value = d.pelnaNazwa;
+        if (d.adres) f.adres.value = d.adres;
+      }),
       przyWyslaniu: async (f) => {
-        const dane = { klientId: id || 'k-' + C.noweId(8), nazwa: f.nazwa.value.trim(), nip: f.nip.value.trim(), adres: f.adres.value.trim(), kontakt: f.kontakt.value.trim(), tel: f.tel.value.trim(), email: f.email.value.trim() };
+        const dane = { klientId: id || 'k-' + C.noweId(8), nazwa: f.nazwa.value.trim(), nip: normNip(f.nip.value), adres: f.adres.value.trim(), kontakt: f.kontakt.value.trim(), tel: f.tel.value.trim(), email: f.email.value.trim() };
         if (!dane.nazwa) throw new Error('Podaj nazwę firmy');
+        if (/^\d+$/.test(dane.nip) && !C.poprawnyNip(dane.nip)) throw new Error('Nieprawidłowy NIP – sprawdź cyfry (nie zgadza się suma kontrolna)');
+        const dubel = Array.from(app.st.klienci.values()).find((x) => x.klientId !== dane.klientId && C.normKlucz(x.nazwa) === C.normKlucz(dane.nazwa));
+        if (dubel) throw new Error('Klient o tej nazwie już jest na liście');
         await utworzZdarzenie('KLIENT', dane);
-        return 'ok';
+        return dane.nazwa;
       },
     });
     if (w) { toast('Zapisano klienta', 'ok'); render(); }
+    return w;
+  }
+
+  async function edytujDostawce(id, wstepne) {
+    const d = id ? app.st.dostawcy.get(id) : Object.assign({ nazwa: '', pelnaNazwa: '', nip: '', regon: '', krs: '', adres: '', adresBiura: '', tel: '', email: '', www: '', marki: '', uwagi: '', aktywny: true }, wstepne || {});
+    if (!d) return null;
+    let pobrano = '';
+    const wej = (nazwa, atr) => '<input name="' + nazwa + '" value="' + esc(d[nazwa] || '') + '" ' + (atr || '') + '>';
+    const w = await dialog({
+      tytul: id ? 'Dostawca: ' + esc(d.nazwa) : 'Nowy dostawca', szeroki: true,
+      tresc: (d.wbudowany ? '<div class="alert info maly">Dostawca z wbudowanej biblioteki – ' + esc(d.zrodlo || '') + '. Dane możesz poprawić; zmiana zapisze się w dzienniku.</div>' : '') +
+        '<div class="siatka">' + poleNip(d.nip) +
+        pole('Nazwa skrócona *', wej('nazwa', 'placeholder="np. Polsound"'), '', 'dostawca') +
+        pole('Marki / co u nich kupujemy', wej('marki', 'placeholder="np. Shure, Sony"')) +
+        pole('Pełna nazwa (z rejestru)', wej('pelnaNazwa'), 'szerokie') +
+        pole('REGON', wej('regon', 'inputmode="numeric"')) +
+        pole('KRS', '<div class="wiersz-linku">' + wej('krs', 'inputmode="numeric"') + '<button type="button" class="przycisk" data-krs data-tip="Otwiera dane spółki w serwisie rejestr.io">' + ikona('link') + 'Sprawdź</button></div>') +
+        pole('Adres siedziby', wej('adres'), 'szerokie') +
+        pole('Adres biura lub magazynu', wej('adresBiura', 'placeholder="jeśli inny niż siedziba"'), 'szerokie') +
+        pole('Telefon', wej('tel')) + pole('E-mail', wej('email', 'inputmode="email"')) + pole('Strona www', wej('www', 'placeholder="np. polsound.pl"')) +
+        pole('Uwagi', wej('uwagi'), 'szerokie') +
+        '<div class="pole szerokie"><span>Na listach</span><label class="przelacznik"><input type="checkbox" name="aktywny" ' + (d.aktywny !== false ? 'checked' : '') + '><span>pokazuj tego dostawcę przy przyjęciu</span></label></div>' +
+        '</div><p class="szary maly odstep-gora" data-zrodlo-info>' + (d.zrodlo ? 'Źródło danych: ' + esc(d.zrodlo) : '') + '</p>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz dostawcę', klasa: 'glowny', submit: true }],
+      przyOtwarciu: (f) => podlaczRejestr(f, (r) => {
+        f.pelnaNazwa.value = r.pelnaNazwa;
+        if (!C.norm(f.nazwa.value)) f.nazwa.value = skrotNazwy(r.pelnaNazwa);
+        if (r.regon) f.regon.value = r.regon;
+        if (r.krs) f.krs.value = r.krs;
+        if (r.adres) f.adres.value = r.adres;
+        pobrano = 'Biała lista VAT (Ministerstwo Finansów), pobrano ' + fmtData(dzis());
+        $('[data-zrodlo-info]', f).textContent = 'Źródło danych: ' + pobrano;
+      }),
+      przyWyslaniu: async (f) => {
+        const t = (n) => f[n].value.trim();
+        const dane = { dostawcaId: (id && d.dostawcaId) || 'd-' + C.noweId(8), nazwa: t('nazwa'), pelnaNazwa: t('pelnaNazwa'), nip: normNip(t('nip')), regon: C.cyfry(t('regon')), krs: C.cyfry(t('krs')) ? C.cyfry(t('krs')).padStart(10, '0') : '', adres: t('adres'), adresBiura: t('adresBiura'), tel: t('tel'), email: t('email'), www: t('www').replace(/^https?:\/\//i, '').replace(/\/$/, ''), marki: t('marki'), uwagi: t('uwagi'), aktywny: f.aktywny.checked };
+        if (pobrano) dane.zrodlo = pobrano;
+        else if (!id) dane.zrodlo = 'wpisane ręcznie ' + fmtData(dzis());
+        if (!dane.nazwa) throw new Error('Podaj nazwę skróconą dostawcy (tak będzie widoczny na listach)');
+        if (/^\d+$/.test(dane.nip) && !C.poprawnyNip(dane.nip)) throw new Error('Nieprawidłowy NIP – sprawdź cyfry (nie zgadza się suma kontrolna)');
+        if (dane.regon && !C.poprawnyRegon(dane.regon)) throw new Error('Nieprawidłowy REGON – sprawdź cyfry');
+        for (const x of app.st.dostawcy.values()) {
+          if (x.dostawcaId === dane.dostawcaId) continue;
+          if (C.normKlucz(x.nazwa) === C.normKlucz(dane.nazwa)) throw new Error('Dostawca o nazwie „' + x.nazwa + '” już jest w bibliotece');
+          if (dane.nip && x.nip && normNip(x.nip) === dane.nip) throw new Error('Ten NIP ma już dostawca „' + x.nazwa + '”');
+        }
+        await utworzZdarzenie('DOSTAWCA', dane);
+        return dane.nazwa;
+      },
+    });
+    if (w) { toast('Zapisano dostawcę', 'ok'); render(); }
+    return w;
+  }
+
+  // ------------------------------------------------------------ projekty
+
+  function czyProjektUzyty(numer) {
+    const k = C.normKlucz(numer);
+    if (!k) return false;
+    for (const { ev } of app.st.dokumenty.values()) {
+      const d = ev.dane;
+      if (C.normKlucz(d.projekt) === k || (d.pozycje || []).some((p) => C.normKlucz(p.projekt) === k || C.normKlucz(p.projektZakupu) === k)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Okno projektu. Zwraca numer zapisanego projektu, 'pomin' (przy zapisie dokumentu: dalej bez nazwy) albo null.
+   * opcje.przyZapisie – okno wywołane z zapisu dokumentu, gdy numer pojawia się po raz pierwszy.
+   */
+  async function edytujProjekt(id, wstepne, opcje = {}) {
+    let p = id ? app.st.rejestrProjektow.get(id) : null;
+    if (!p && wstepne && wstepne.numer) p = C.projektWgNumeru(app.st, wstepne.numer);
+    const nowy = !p;
+    const d = Object.assign({ numer: '', nazwa: '', klientNazwa: '', adres: '', status: 'w toku', uwagi: '' }, p || {}, nowy ? wstepne || {} : {});
+    if (nowy && !d.nazwa) d.nazwa = C.nazwaProjektu(app.st, d.numer);
+    const zablokowany = !!d.numer && czyProjektUzyty(d.numer);
+    const w = await dialog({
+      tytul: opcje.przyZapisie ? 'Nowy projekt ' + esc(d.numer) : nowy ? 'Nowy projekt' : 'Projekt ' + esc(d.numer), szeroki: true,
+      tresc: (opcje.przyZapisie ? '<p>Projekt <b>' + esc(d.numer) + '</b> pojawia się po raz pierwszy. Podaj jego nazwę – będzie widoczna obok numeru na listach, w raportach i na wydruku, a projekt znajdziesz potem także po nazwie.</p>' : '') +
+        '<div class="siatka">' +
+        pole('Numer projektu *', '<input name="numer" value="' + esc(d.numer) + '" placeholder="np. P-2026-014"' + (zablokowany ? ' readonly' : '') + '>' + (zablokowany ? '<small class="szary">Numer jest już użyty w dokumentach, więc nie można go zmienić.</small>' : ''), '', 'projektNumer') +
+        pole('Nazwa projektu *', '<input name="nazwa" value="' + esc(d.nazwa) + '" placeholder="np. Kancelaria Beta – sale konferencyjne">', 'szerokie-2', 'projektNazwa') +
+        pole('Klient', wybierak('klienci', 'n:klientNazwa', d.klientNazwa, { placeholder: 'wybierz z listy albo wpisz' }), 'szerokie-2', 'klient') +
+        pole('Adres obiektu', wybierak('adresy', 'n:adres', d.adres, { placeholder: 'gdzie jest realizowany projekt' }), 'szerokie-2', 'adresObiektu') +
+        pole('Status', '<select name="status"><option value="w toku"' + (d.status !== 'zakończony' ? ' selected' : '') + '>w toku</option><option value="zakończony"' + (d.status === 'zakończony' ? ' selected' : '') + '>zakończony</option></select>', '', 'projektStatus') +
+        pole('Uwagi', '<input name="uwagi" value="' + esc(d.uwagi || '') + '">', 'szerokie') +
+        '</div>',
+      przyciski: opcje.przyZapisie
+        ? [{ wartosc: 'anuluj', etykieta: 'Wróć do dokumentu' }, { wartosc: 'pomin', etykieta: 'Dalej bez nazwy' }, { wartosc: 'ok', etykieta: 'Zapisz projekt', klasa: 'glowny', submit: true }]
+        : [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz projekt', klasa: 'glowny', submit: true }],
+      fokus: d.numer ? 'nazwa' : 'numer',
+      przyWyslaniu: async (f, wartosc) => {
+        if (wartosc === 'pomin') return 'pomin';
+        const dane = { projektId: (p && p.projektId) || 'pr-' + C.noweId(8), numer: C.norm(f.numer.value), nazwa: C.norm(f.nazwa.value), klientNazwa: C.norm(f.klientNazwa.value), adres: C.norm(f.adres.value), status: f.status.value, uwagi: C.norm(f.uwagi.value) };
+        if (!dane.numer) throw new Error('Podaj numer projektu');
+        if (!dane.nazwa) throw new Error('Podaj nazwę projektu' + (opcje.przyZapisie ? ' albo kliknij „Dalej bez nazwy”' : ''));
+        const inny = C.projektWgNumeru(app.st, dane.numer);
+        if (inny && inny.projektId !== dane.projektId) throw new Error('Projekt ' + inny.numer + ' już jest w rejestrze („' + inny.nazwa + '”)');
+        await utworzZdarzenie('PROJEKT', dane);
+        return dane.numer;
+      },
+    });
+    if (w && w !== 'pomin' && !opcje.przyZapisie) { toast('Zapisano projekt ' + w, 'ok'); render(); }
+    return w;
+  }
+
+  async function pokazProjekt(numer) {
+    const k = C.normKlucz(numer);
+    const p = C.listaProjektow(app.st).find((x) => C.normKlucz(x.numer) === k) || { numer, nazwa: '', status: 'w toku' };
+    const docs = C.dokumentyLista(app.st).filter((d) => C.normKlucz(d.ev.dane.projekt) === k || (d.ev.dane.pozycje || []).some((x) => C.normKlucz(x.projekt) === k));
+    const wMag = C.wierszeMagazynu(app.st).filter((x) => C.normKlucz(x.projekt) === k);
+    const wyd = C.wydaneNaProjekt(app.st, numer);
+    const doUzup = app.st.uzupelnienia.filter((u) => !u.zamkniete && C.normKlucz(u.projektZakupu) === k);
+    const tab = (naglowki, wiersze, pusto) => wiersze.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr>' + naglowki.map((h) => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' + wiersze.join('') + '</tbody></table></div>' : '<p class="szary">' + pusto + '</p>';
+    const tresc = '<dl class="opis"><dt>Numer</dt><dd><b>' + esc(p.numer) + '</b></dd><dt>Nazwa</dt><dd>' + (p.nazwa ? esc(p.nazwa) : '<span class="ostrz-tekst">bez nazwy</span>') + '</dd>' +
+      (p.klientNazwa ? '<dt>Klient</dt><dd>' + esc(p.klientNazwa) + '</dd>' : '') + (p.adres ? '<dt>Adres obiektu</dt><dd>' + esc(p.adres) + '</dd>' : '') +
+      '<dt>Status</dt><dd>' + (p.status === 'zakończony' ? '<span class="znaczek anul">zakończony</span>' : '<span class="znaczek ok">w toku</span>') + '</dd>' + (p.uwagi ? '<dt>Uwagi</dt><dd>' + esc(p.uwagi) + '</dd>' : '') + '</dl>' +
+      (doUzup.length ? '<div class="alert wzz-alert"><b>' + doUzup.length + ' ' + odm(doUzup.length, 'pozycja kupiona', 'pozycje kupione', 'pozycji kupionych') + ' pod ten projekt</b> poszło wydaniem zastępczym na inny projekt – trzeba je dokupić (lista „Do uzupełnienia”).</div>' : '') +
+      '<h3>W magazynie pod ten projekt</h3>' + tab(['Model', 'Nr seryjny', 'Ilość', 'Lokalizacja'], wMag.map((x) => '<tr><td>' + esc(nazwaModelu(x.modelId)) + '</td><td class="mono">' + esc(x.sn) + '</td><td class="l">' + fmtIl(x.modelId, x.ilosc) + '</td><td>' + esc(x.lok) + '</td></tr>'), 'Nic nie czeka w magazynie.') +
+      '<h3>Wydane na projekt</h3>' + tab(['Model', 'Nr seryjny', 'Ilość', 'Klient', 'Dokument'], wyd.map((x) => '<tr><td>' + esc(nazwaModelu(x.modelId)) + '</td><td class="mono">' + esc(x.sn) + '</td><td class="l">' + fmtIl(x.modelId, x.ilosc) + '</td><td>' + esc(x.klient) + '</td><td>' + esc(x.numer || '') + '</td></tr>'), 'Nic nie zostało wydane.') +
+      '<h3>Dokumenty</h3>' + tab(['Numer', 'Rodzaj', 'Data', 'Pozycje', 'Wystawił'], docs.map((d) => '<tr data-dok="' + esc(d.ev.id) + '" tabindex="0" class="klikalny' + (d.anulowany ? ' anulowany' : '') + '"><td><b class="nowrap">' + esc(d.ev.dane.numer) + '</b></td><td>' + znacznikDok(d) + '</td><td class="nowrap">' + fmtData(d.ev.dane.data || d.ev.ts) + '</td><td class="l">' + (d.ev.dane.pozycje || []).length + '</td><td>' + esc(osoba(d.ev.autor)) + '</td></tr>'), 'Brak dokumentów.');
+    const przyciski = [{ wartosc: 'edytuj', etykieta: p.nazwa ? 'Edytuj projekt' : 'Uzupełnij nazwę' }];
+    if (wyd.length) przyciski.push({ wartosc: 'zwrot', etykieta: ikona('zwrot') + 'Zwrot z projektu' });
+    przyciski.push({ wartosc: 'wydaj', etykieta: ikona('wyd') + 'Wydaj na ten projekt' }, { wartosc: 'ok', etykieta: 'Zamknij', klasa: 'glowny' });
+    const w = await dialog({
+      tytul: esc(p.numer) + (p.nazwa ? ' · ' + esc(p.nazwa) : ''), szeroki: true, tresc, przyciski,
+      przyOtwarciu: (f) => {
+        f.addEventListener('click', (e) => {
+          const t = e.target.closest('[data-dok]');
+          if (t) { e.preventDefault(); otwartyDialog.zamknij('dok:' + t.dataset.dok); }
+        });
+        f.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-dok]')) { e.preventDefault(); otwartyDialog.zamknij('dok:' + e.target.dataset.dok); } });
+      },
+    });
+    if (!w) return;
+    if (w.startsWith('dok:')) return pokazDokument(w.slice(4));
+    if (w === 'edytuj') return edytujProjekt(p.projektId || null, { numer: p.numer });
+    if (w === 'wydaj') return AKCJE.nowyDok({ dataset: { r: 'WZ', projekt: p.numer } });
+    if (w === 'zwrot') return AKCJE.nowyDok({ dataset: { r: 'ZW', projekt: p.numer } });
   }
 
   async function edytujUzytkownika(id) {
@@ -1284,8 +1946,8 @@
     const { m, sn, lok, p, il } = el.dataset;
     const w = await dialog({
       tytul: 'Przenieś: ' + esc(nazwaModelu(m)),
-      tresc: datalisty() + '<p>Z: <b>' + esc(lok) + '</b>' + (sn ? ' · SN <span class="mono">' + esc(sn) + '</span>' : '') + (p ? ' · pod projekt ' + esc(p) : '') + '</p>' +
-        pole('Nowa lokalizacja *', '<input name="do" list="dl-lok">') + (sn ? '' : pole('Ilość (max ' + fmtL(il) + ' ' + esc(jedn(m)) + ')', '<input name="ilosc" value="' + esc(il) + '" inputmode="decimal">')),
+      tresc: '<p>Z: <b>' + esc(lok) + '</b>' + (sn ? ' · SN <span class="mono">' + esc(sn) + '</span>' : '') + (p ? ' · pod projekt ' + esc(projTekst(p)) : '') + '</p>' +
+        pole('Nowa lokalizacja *', wybierak('lokalizacje', 'n:do', '', { opis: true, placeholder: 'wybierz z listy albo wpisz nowe miejsce' })) + (sn ? '' : pole('Ilość (max ' + fmtL(il) + ' ' + esc(jedn(m)) + ')', '<input name="ilosc" value="' + esc(il) + '" inputmode="decimal">')),
       przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Przenieś', klasa: 'glowny', submit: true }],
       przyWyslaniu: async (f) => {
         const doL = f.do.value.trim();
@@ -1349,6 +2011,8 @@
     const aktywny = document.activeElement;
     const klucz = aktywny && (aktywny.dataset.filtr || aktywny.dataset.f || aktywny.dataset.p);
     const kursor = aktywny && typeof aktywny.selectionStart === 'number' ? aktywny.selectionStart : null;
+    const lista = wyb.pole && !listaWyboru.hidden && !wyb.pole.closest('#modal') ? { filtr: wyb.pole.dataset.pisze === '1' } : null;
+    if (dymekDla && !dymekDla.closest('#modal')) ukryjDymek(); // dymek przycisku, który za chwilę zniknie
     root.innerHTML = html;
     if ($('.zawartosc')) $('.zawartosc').scrollTop = przewiniecie;
     if (klucz) {
@@ -1358,13 +2022,19 @@
         if (kursor !== null && typeof el.setSelectionRange === 'function') try { el.setSelectionRange(kursor, kursor); } catch (e) { /* */ }
       }
     }
+    if (wyb.pole && !wyb.pole.isConnected) zamknijListe();
+    const a = document.activeElement;
+    if (lista && a && a.dataset && a.dataset.wybierak && !a.closest('#modal')) {
+      if (lista.filtr) a.dataset.pisze = '1';
+      otworzListe(a, lista.filtr);
+    }
   }
 
   // ------------------------------------------------------------ nawigacja
 
   function czySzkicZmieniony(s) {
     if (!s) return false;
-    const pusty = nowySzkic(s.rodzaj);
+    const pusty = Object.assign(nowySzkic(s.rodzaj), s.poczatek || {});
     for (const k of ['projekt', 'klientNazwa', 'adres', 'osoba', 'dostawca', 'nrFaktury', 'uwagi', 'powod']) if (C.norm(s[k]) !== C.norm(pusty[k])) return true;
     if (!!s.podProjekt !== !!pusty.podProjekt) return true;
     return s.pozycje.some((p) => p.modelId || p.sn || C.norm(p.modelLabel) || C.norm(p.snTekst) || C.norm(p.ilosc) || (s.rodzaj !== 'WZ' && s.rodzaj !== 'ZW' && C.norm(p.lok)));
@@ -1492,6 +2162,11 @@
       if (!(await moznaOpuscic())) return;
       app.szkic = nowySzkic(el.dataset.r);
       if (el.dataset.r === 'PZ' || el.dataset.r === 'BO') app.szkic.pozycje.push({ modelLabel: '', modelId: '', lok: '', snTekst: '', ilosc: '', jedn: 'baza', stanTech: 'nowy', projekt: '' });
+      if (el.dataset.projekt) {
+        app.szkic.projekt = el.dataset.projekt;
+        uzupelnijZProjektu();
+        app.szkic.poczatek = { projekt: app.szkic.projekt, klientNazwa: app.szkic.klientNazwa, adres: app.szkic.adres };
+      }
       app.filtr.wybor = '';
       if (app.widok === 'dokument') render();
       else pokazWidok('dokument');
@@ -1552,6 +2227,22 @@
     },
     edytujModel(el) { edytujModel(el.dataset.id || null, el.dataset.poz); },
     edytujKlienta(el) { edytujKlienta(el.dataset.id || null); },
+    edytujDostawce(el) { edytujDostawce(el.dataset.id || null); },
+    edytujProjekt(el) { edytujProjekt(el.dataset.id || null, el.dataset.numer ? { numer: el.dataset.numer } : null); },
+    pokazProjekt(el) { pokazProjekt(el.dataset.numer); },
+    async dodajDoWybieraka(el) {
+      const { zrodlo, cel } = el.dataset;
+      let tekst = el.dataset.tekst;
+      if (tekst === undefined) {
+        const pole = $$('input[data-wybierak]').find((x) => celPola(x) === cel);
+        tekst = pole ? pole.value : '';
+      }
+      if (!DODAJ[zrodlo]) return;
+      const w = await DODAJ[zrodlo](C.norm(tekst), cel);
+      if (w == null || w === 'pomin') return;
+      ustawCel(cel, w);
+      render();
+    },
     przenies(el) { przenies(el); },
     uzupelnij(el) { uzupelnij(el); },
     raport(el) { app.filtr.raport = el.dataset.r; render(); },
@@ -1664,10 +2355,16 @@
     if (!app.szkic) return;
     if (el.dataset.f) {
       app.szkic[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.dataset.f === 'projekt' && natychmiast) uzupelnijZProjektu();
       if (wybor && el.dataset.przerysuj && natychmiast) render();
-      else if (!wybor && el.dataset.przerysujPo && !natychmiast) {
-        clearTimeout(opoznienie);
-        opoznienie = setTimeout(render, 400);
+      else if (!wybor && el.dataset.przerysujPo) {
+        if (el.dataset.wybierak) {
+          // pole z listą: przerysowanie po wyborze albo po wyjściu z pola, nie w trakcie szukania
+          if (natychmiast) przerysujBezpiecznie();
+        } else if (!natychmiast) {
+          clearTimeout(opoznienie);
+          opoznienie = setTimeout(render, 400);
+        }
       }
       return;
     }

@@ -31,6 +31,59 @@
 
   const STANY_TECHNICZNE = ['nowy', 'używany', 'uszkodzony'];
 
+  /**
+   * Wbudowana biblioteka dostawców – dane z rejestrów (KRS / REGON / Biała lista VAT),
+   * sprawdzone 06.11.2026. Użytkownik może je poprawić: jego zmiana (zdarzenie DOSTAWCA
+   * z tym samym dostawcaId) nadpisuje wartości wbudowane.
+   */
+  const ZRODLO_WBUDOWANE = 'dane z rejestru KRS i REGON, sprawdzone 06.11.2026';
+  const DOSTAWCY_WBUDOWANI = [
+    {
+      dostawcaId: 'wb-aplauz', nazwa: 'Aplauz Audio',
+      pelnaNazwa: '„APLAUZ” SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      nip: '1181710940', regon: '015566419', krs: '0000179872',
+      adres: 'ul. Graniczna 19, 05-092 Łomianki', adresBiura: '', tel: '', email: '', www: 'aplauzaudio.pl',
+      marki: '', uwagi: 'Dystrybutor sprzętu audio',
+    },
+    {
+      dostawcaId: 'wb-polsound', nazwa: 'Polsound',
+      pelnaNazwa: 'POLSOUND SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      nip: '5260307175', regon: '010538252', krs: '0000121965',
+      adres: 'ul. Graniczna 17, 05-092 Łomianki', adresBiura: 'ul. Brukowa 29, 05-092 Łomianki',
+      tel: '+48 22 204 11 00', email: 'biuro@polsound.pl', www: 'polsound.pl',
+      marki: 'Shure, Sony (wyświetlacze profesjonalne)', uwagi: 'Oficjalny dystrybutor Shure w Polsce',
+    },
+    {
+      dostawcaId: 'wb-suprema', nazwa: 'Suprema Polska',
+      pelnaNazwa: 'SUPREMA POLSKA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      nip: '5222498486', regon: '016123115', krs: '0000315683',
+      adres: 'ul. Atlasowa 19, 02-437 Warszawa', adresBiura: 'ul. Jaworskiego 6/2, 05-090 Raszyn',
+      tel: '', email: 'info@supremapolska.pl', www: 'supremapolska.pl',
+      marki: 'Suprema (ekrany projekcyjne)', uwagi: 'Ekrany projekcyjne, monitory, projektory',
+    },
+    {
+      dostawcaId: 'wb-sony', nazwa: 'Sony',
+      pelnaNazwa: 'SONY EUROPE B.V. (SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ) ODDZIAŁ W POLSCE',
+      nip: '1080022836', regon: '382193856', krs: '0000763518',
+      adres: 'ul. Ogrodowa 58, 00-876 Warszawa', adresBiura: '', tel: '', email: '', www: 'sony.pl',
+      marki: 'Sony', uwagi: 'Polski oddział producenta',
+    },
+    {
+      dostawcaId: 'wb-samsung', nazwa: 'Samsung',
+      pelnaNazwa: 'SAMSUNG ELECTRONICS POLSKA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      nip: '5261044039', regon: '011612810', krs: '0000128080',
+      adres: 'ul. Postępu 14, 02-676 Warszawa', adresBiura: '', tel: '', email: '', www: 'samsung.com/pl',
+      marki: 'Samsung', uwagi: 'Polska spółka producenta',
+    },
+    {
+      dostawcaId: 'wb-konsbud', nazwa: 'Konsbud Audio',
+      pelnaNazwa: 'KONSBUD AUDIO SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ',
+      nip: '5260202855', regon: '012064999', krs: '0000073444',
+      adres: 'ul. Gajdy 24, 02-878 Warszawa', adresBiura: '', tel: '', email: '', www: 'konsbud-audio.pl',
+      marki: 'Biamp, Audio-Technica', uwagi: 'Dystrybutor i integrator systemów audio',
+    },
+  ].map((d) => Object.assign(d, { zrodlo: ZRODLO_WBUDOWANE }));
+
   // ---------------------------------------------------------------- narzędzia
 
   function canonical(v) {
@@ -83,6 +136,47 @@
     return norm(s).toLowerCase().replace(/\s+/g, ' ');
   }
 
+  /** Klucz do wyszukiwania: małe litery, bez polskich znaków i nadmiarowych spacji. */
+  function kluczSzukania(s) {
+    return normKlucz(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+  }
+
+  /** Czy każdy wyraz z zapytania występuje w tekście (bez względu na wielkość liter i ogonki). */
+  function pasujeDo(zapytanie, ...teksty) {
+    const z = kluczSzukania(zapytanie);
+    if (!z) return true;
+    const t = kluczSzukania(teksty.join(' '));
+    return z.split(' ').every((cz) => t.includes(cz));
+  }
+
+  function cyfry(s) {
+    return norm(s).replace(/\D/g, '');
+  }
+
+  /** Suma kontrolna NIP (10 cyfr, wagi 6-5-7-2-3-4-5-6-7). Przyjmuje też „PL” i kreski. */
+  function poprawnyNip(nip) {
+    const c = cyfry(nip);
+    if (c.length !== 10) return false;
+    const w = [6, 5, 7, 2, 3, 4, 5, 6, 7];
+    let s = 0;
+    for (let i = 0; i < 9; i++) s += Number(c[i]) * w[i];
+    const k = s % 11;
+    return k !== 10 && k === Number(c[9]);
+  }
+
+  /** Suma kontrolna REGON (9 albo 14 cyfr). */
+  function poprawnyRegon(regon) {
+    const c = cyfry(regon);
+    const licz = (n, w) => {
+      let s = 0;
+      for (let i = 0; i < w.length; i++) s += Number(n[i]) * w[i];
+      return (s % 11) % 10;
+    };
+    if (c.length === 9) return licz(c, [8, 9, 2, 3, 4, 5, 6, 7]) === Number(c[8]);
+    if (c.length === 14) return poprawnyRegon(c.slice(0, 9)) && licz(c, [2, 4, 8, 5, 0, 9, 7, 3, 6, 1, 2, 4, 8]) === Number(c[13]);
+    return false;
+  }
+
   async function hashPin(salt, pin) {
     return sha256hex('magazyn-pin|' + salt + '|' + String(pin));
   }
@@ -117,10 +211,16 @@
   // ---------------------------------------------------------------- stan
 
   function pustyStan() {
+    const dostawcy = new Map(); // dostawcaId -> {...}; zaczynamy od biblioteki wbudowanej
+    for (const d of DOSTAWCY_WBUDOWANI) dostawcy.set(d.dostawcaId, Object.assign({}, d, { wbudowany: true }));
     return {
       uzytkownicy: new Map(), // userId -> {...}
       modele: new Map(), // modelId -> {...}
       klienci: new Map(), // klientId -> {...}
+      dostawcy,
+      rejestrProjektow: new Map(), // projektId -> {numer, nazwa, klientNazwa, adres, status, uwagi}
+      projektyWgNumeru: new Map(), // normKlucz(numer) -> wpis z rejestru
+      nazwyZDokumentow: new Map(), // normKlucz(numer) -> nazwa zapisana w dokumencie
       dokumenty: new Map(), // eventId -> {ev, anulowany, anulowanie, skany:[]}
       wgNumeru: new Map(), // numer -> [eventId]
       egzemplarze: new Map(), // modelId|sn -> {...}
@@ -206,6 +306,12 @@
       }
     }
 
+    for (const p of st.rejestrProjektow.values()) {
+      if (!norm(p.numer)) continue;
+      st.projektyWgNumeru.set(normKlucz(p.numer), p);
+      st.projekty.add(norm(p.numer));
+    }
+
     if (!opcje.bezKontroli) kontrolaSpojnosci(st);
     return st;
   }
@@ -228,8 +334,19 @@
         st.klienci.set(d.klientId, Object.assign({}, stary, d, { utworzono: stary.utworzono || ev.ts }));
         break;
       }
+      case 'PROJEKT': {
+        const stary = st.rejestrProjektow.get(d.projektId) || {};
+        st.rejestrProjektow.set(d.projektId, Object.assign({}, stary, d, { utworzono: stary.utworzono || ev.ts }));
+        break;
+      }
+      case 'DOSTAWCA': {
+        const stary = st.dostawcy.get(d.dostawcaId) || {};
+        st.dostawcy.set(d.dostawcaId, Object.assign({}, stary, d, { utworzono: stary.utworzono || ev.ts, zmieniono: ev.ts }));
+        break;
+      }
       case 'DOK': {
         const anul = anulowane.get(ev.id);
+        if (d.projekt && norm(d.projektNazwa)) st.nazwyZDokumentow.set(normKlucz(d.projekt), norm(d.projektNazwa));
         const wpis = { ev, anulowany: !!anul, anulowanie: anul || null, skany: [] };
         st.dokumenty.set(ev.id, wpis);
         const lista = st.wgNumeru.get(d.numer) || [];
@@ -569,16 +686,77 @@
     return Array.from(st.dokumenty.values()).sort((a, b) => (a.ev.ts < b.ev.ts ? 1 : -1));
   }
 
+  // ---------------------------------------------------------------- projekty i dostawcy
+
+  /** Wpis z rejestru projektów dla numeru (albo null, gdy projekt ma tylko numer). */
+  function projektWgNumeru(st, numer) {
+    return st.projektyWgNumeru.get(normKlucz(numer)) || null;
+  }
+
+  /** Nazwa projektu: z rejestru, a gdy jej tam nie ma – zapamiętana w dokumentach. */
+  function nazwaProjektu(st, numer) {
+    if (!norm(numer)) return '';
+    const p = projektWgNumeru(st, numer);
+    return (p && norm(p.nazwa)) || st.nazwyZDokumentow.get(normKlucz(numer)) || '';
+  }
+
+  /** „P-2026-014 – Biuro Alfa” albo sam numer. */
+  function opisProjektu(st, numer) {
+    const n = nazwaProjektu(st, numer);
+    return norm(numer) + (n ? ' – ' + n : '');
+  }
+
+  /** Wszystkie projekty: z rejestru i te, które występują tylko w dokumentach (bez nazwy). */
+  function listaProjektow(st) {
+    const wynik = new Map();
+    for (const p of st.rejestrProjektow.values()) {
+      if (!norm(p.numer)) continue;
+      wynik.set(normKlucz(p.numer), Object.assign({ status: 'w toku' }, p, { numer: norm(p.numer), wRejestrze: true }));
+    }
+    for (const numer of st.projekty) {
+      const k = normKlucz(numer);
+      if (!wynik.has(k)) wynik.set(k, { projektId: '', numer, nazwa: st.nazwyZDokumentow.get(k) || '', klientNazwa: '', adres: '', status: 'w toku', wRejestrze: false });
+    }
+    // klient i ostatnia data z dokumentów
+    for (const { ev, anulowany } of st.dokumenty.values()) {
+      const d = ev.dane;
+      if (!d.projekt || anulowany) continue;
+      const p = wynik.get(normKlucz(d.projekt));
+      if (!p) continue;
+      if (!p.klientNazwa && d.klientNazwa) p.klientNazwa = d.klientNazwa;
+      if (!p.adres && d.adres) p.adres = d.adres;
+      if (!p.ostatni || p.ostatni < ev.ts) p.ostatni = ev.ts;
+      p.dokumenty = (p.dokumenty || 0) + 1;
+    }
+    return Array.from(wynik.values()).sort((a, b) => b.numer.localeCompare(a.numer, 'pl', { numeric: true }));
+  }
+
+  /** Dostawca z biblioteki po nazwie skróconej albo pełnej (bez względu na wielkość liter). */
+  function dostawcaWgNazwy(st, nazwa) {
+    const k = normKlucz(nazwa);
+    if (!k) return null;
+    for (const d of st.dostawcy.values()) if (normKlucz(d.nazwa) === k || normKlucz(d.pelnaNazwa) === k) return d;
+    return null;
+  }
+
   function podpowiedzi(st) {
     const klienci = new Set();
     for (const k of st.klienci.values()) if (k.nazwa) klienci.add(k.nazwa);
     for (const { ev } of st.dokumenty.values()) if (ev.dane.klientNazwa) klienci.add(ev.dane.klientNazwa);
+    for (const p of st.rejestrProjektow.values()) if (p.klientNazwa) klienci.add(p.klientNazwa);
     const dostawcy = new Set();
+    for (const d of st.dostawcy.values()) if (d.aktywny !== false && d.nazwa) dostawcy.add(d.nazwa);
     for (const { ev } of st.dokumenty.values()) if (ev.dane.dostawca) dostawcy.add(ev.dane.dostawca);
     const producenci = new Set();
     for (const m of st.modele.values()) if (m.producent) producenci.add(m.producent);
+    const osoby = new Set();
+    for (const u of st.uzytkownicy.values()) if (u.aktywny !== false && u.imie) osoby.add(u.imie + ' ' + u.nazwisko);
+    for (const { ev } of st.dokumenty.values()) if (ev.dane.osoba) osoby.add(ev.dane.osoba);
+    const adresy = new Set();
+    for (const p of st.rejestrProjektow.values()) if (p.adres) adresy.add(p.adres);
+    for (const { ev } of st.dokumenty.values()) if (ev.dane.adres) adresy.add(ev.dane.adres);
     const sortuj = (s) => Array.from(s).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pl'));
-    return { lokalizacje: sortuj(st.lokalizacje), projekty: sortuj(st.projekty), klienci: sortuj(klienci), dostawcy: sortuj(dostawcy), producenci: sortuj(producenci) };
+    return { lokalizacje: sortuj(st.lokalizacje), projekty: sortuj(st.projekty), klienci: sortuj(klienci), dostawcy: sortuj(dostawcy), producenci: sortuj(producenci), osoby: sortuj(osoby), adresy: sortuj(adresy) };
   }
 
   /** Czy wartość jest nowa (nie występowała) – do potwierdzania nowych lokalizacji/projektów. */
@@ -590,7 +768,9 @@
   function opisZdarzenia(st, ev) {
     const d = ev.dane || {};
     switch (ev.typ) {
-      case 'DOK': return (RODZAJE[d.rodzaj] || {}).nazwa + ' ' + d.numer + (d.projekt ? ' · projekt ' + d.projekt : '') + ' · ' + (d.pozycje || []).length + ' poz.';
+      case 'DOK': return (RODZAJE[d.rodzaj] || {}).nazwa + ' ' + d.numer + (d.projekt ? ' · projekt ' + opisProjektu(st, d.projekt) : '') + (d.dostawca ? ' · ' + d.dostawca : '') + ' · ' + (d.pozycje || []).length + ' poz.';
+      case 'PROJEKT': return 'Projekt: ' + (d.numer || '') + (d.nazwa ? ' – ' + d.nazwa : '') + (d.status === 'zakończony' ? ' (zakończony)' : '');
+      case 'DOSTAWCA': return 'Dostawca: ' + (d.nazwa || d.dostawcaId) + (d.aktywny === false ? ' (ukryty na listach)' : '');
       case 'ANUL': return 'Anulowano ' + (d.numer || '') + ' · powód: ' + (d.powod || '');
       case 'PRZENIES': return 'Przeniesiono ' + opisModelu(st, d.modelId) + (d.sn ? ' SN ' + d.sn : ' · ' + d.ilosc + ' ' + jm(st, d.modelId)) + ' z „' + d.z + '” do „' + d.do + '”';
       case 'SKAN': return 'Dołączono skan do ' + (d.numer || '') + ': ' + d.plik;
@@ -603,8 +783,10 @@
   }
 
   return {
-    WERSJA, RODZAJE, KATEGORIE, STANY_TECHNICZNE,
+    WERSJA, RODZAJE, KATEGORIE, STANY_TECHNICZNE, DOSTAWCY_WBUDOWANI,
     canonical, sha256hex, zapieczetuj, sprawdzPieczec, noweId, zaokr, norm, normKlucz, hashPin,
+    kluczSzukania, pasujeDo, cyfry, poprawnyNip, poprawnyRegon,
+    projektWgNumeru, nazwaProjektu, opisProjektu, listaProjektow, dostawcaWgNazwy,
     formatNumer, nazwaPlikuDokumentu, sciezkaZdarzenia, czyPoprawnaNazwaPliku,
     zbudujStan, noweZdarzenie, nastepnyNumer, przygotujDokument, sprawdzNowe, walidujDokument, czyZastepcze,
     stanyModeli, wierszeMagazynu, wydaneNaProjekt, dokumentyLista, podpowiedzi, czyNowaWartosc, opisZdarzenia, opisModelu,

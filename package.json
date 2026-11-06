@@ -1,6 +1,6 @@
 {
   "name": "magazyn-av",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Magazyn urządzeń i materiałów instalacyjnych MAASCK – aplikacja w jednym pliku HTML, dane w folderze OneDrive",
   "private": true,
   "scripts": {

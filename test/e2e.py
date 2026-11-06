@@ -34,16 +34,33 @@ def okno_przycisk(p, tekst):
     p.locator('#modal .okno-stopka button', has_text=tekst).click()
 
 
-def zapisz_z_pinem(p, pin='1234'):
+def zapisz_z_pinem(p, pin='1234', nazwa_projektu='Projekt testowy'):
     p.locator('.stopka-formularza button.glowny').click()
-    # ewentualne potwierdzenia (nowe wartości, WZZ)
-    for _ in range(3):
+    # ewentualne potwierdzenia (nowe wartości, nowy projekt, WZZ)
+    for _ in range(4):
         p.wait_for_selector('#modal .okno')
         if p.locator('#modal input[name=pin]').count():
             break
+        if p.locator('#modal input[name=nazwa]').count():  # nowy projekt – podaj nazwę
+            p.fill('#modal input[name=nazwa]', nazwa_projektu)
+            okno_przycisk(p, 'Zapisz projekt')
+            p.wait_for_timeout(100)
+            continue
         p.locator('#modal .okno-stopka button.glowny, #modal .okno-stopka button.czerwony').last.click()
+        p.wait_for_timeout(100)
     p.fill('#modal input[name=pin]', pin)
     okno_przycisk(p, 'Potwierdź')
+
+
+def wybierz(p, selektor, tekst):
+    """Pisze w polu z listą i zatwierdza pierwszą pasującą pozycję Enterem."""
+    pole = p.locator(selektor)
+    pole.click()
+    pole.fill('')
+    pole.type(tekst, delay=10)
+    p.wait_for_selector('.lista-wyboru:not([hidden])')
+    p.keyboard.press('Enter')
+    p.wait_for_timeout(150)
 
 
 with sync_playwright() as pw:
@@ -80,7 +97,7 @@ with sync_playwright() as pw:
       p.go_back()
       p.wait_for_selector('h1:has-text("Stan magazynu")')
       p.click('nav a[data-w=pulpit]')
-      for i, w in enumerate(['stan', 'lokalizacje', 'urzadzenia', 'dokumenty', 'uzupelnienia', 'raporty', 'kartoteka', 'klienci', 'dziennik', 'problemy', 'ustawienia', 'pomoc']):
+      for i, w in enumerate(['stan', 'lokalizacje', 'urzadzenia', 'dokumenty', 'uzupelnienia', 'raporty', 'projekty', 'kartoteka', 'klienci', 'dostawcy', 'dziennik', 'problemy', 'ustawienia', 'pomoc']):
           p.click(f'nav a[data-w={w}]')
           p.wait_for_timeout(150)
           p.screenshot(path=ZRZUTY / f'02-{i:02d}-{w}.png', full_page=False)
@@ -96,6 +113,38 @@ with sync_playwright() as pw:
       # problemy w danych demo powinny być puste
       p.click('nav a[data-w=problemy]')
       assert p.locator('.alert.ok').count() == 1, 'dane demo mają uwagi spójności: ' + p.inner_text('.zawartosc')
+      # projekt po nazwie: w dokumentach, w rejestrze i w raporcie
+      p.click('nav a[data-w=dokumenty]')
+      p.fill('[data-filtr=dok]', 'modernizacja sal')
+      p.wait_for_timeout(400)
+      assert p.locator('.zawartosc tbody tr').count() == 2, p.inner_text('.zawartosc')
+      p.fill('[data-filtr=dok]', '')
+      p.wait_for_timeout(400)
+      p.click('nav a[data-w=projekty]')
+      assert p.locator('text=Hotel Gamma').count() == 0, 'zakończony projekt powinien być schowany'
+      p.locator('tr:has-text("P-2026-014")').click()
+      p.wait_for_selector('#modal >> text=Kancelaria Beta – sale konferencyjne')
+      p.screenshot(path=ZRZUTY / '06-projekt.png')
+      okno_przycisk(p, 'Wydaj na ten projekt')
+      p.wait_for_selector('h1:has-text("Wydanie na projekt")')
+      assert p.locator('[data-f=projekt]').input_value() == 'P-2026-014'
+      assert p.locator('[data-f=klientNazwa]').input_value() == 'Alfa Nieruchomości Sp. z o.o.'
+      p.click('text=← Wróć')  # nic nie zmieniono – bez pytania
+      p.wait_for_selector('h1:has-text("Projekty")')
+      p.click('nav a[data-w=raporty]')
+      wybierz(p, '[data-filtr=rap_projekt]', 'sal lek')
+      p.wait_for_timeout(500)
+      assert p.locator('[data-filtr=rap_projekt]').input_value() == 'P-2026-011'
+      assert 'SP 100 – modernizacja sal lekcyjnych' in p.inner_text('.zawartosc')
+      # wydanie: projekt wybrany po nazwie, klient i adres z rejestru
+      p.click('.szybkie button:has-text("Wydanie")')
+      wybierz(p, '[data-f=projekt]', 'kancel')
+      assert p.locator('[data-f=projekt]').input_value() == 'P-2026-014'
+      assert p.locator('[data-f=adres]').input_value().startswith('ul. Przykładowa 1')
+      assert 'Kancelaria Beta' in p.inner_text('.opis-wyboru >> nth=0')
+      p.screenshot(path=ZRZUTY / '07-wydanie-projekt.png')
+      p.click('.stopka-formularza >> text=Porzuć')
+      okno_przycisk(p, 'Porzuć dokument')
       # podgląd WZZ i wydruk
       p.click('nav a[data-w=dokumenty]')
       p.locator('tr.wzz').first.click()
@@ -168,12 +217,19 @@ with sync_playwright() as pw:
 
       # przyjęcie pod projekt
       p.click('.szybkie button:has-text("Przyjęcie")')
-      p.fill('[data-f=dostawca]', 'Dystrybutor X')
+      wybierz(p, '[data-f=dostawca]', 'shure')  # po marce
+      assert p.locator('[data-f=dostawca]').input_value() == 'Polsound'
+      assert '5260307175' in p.inner_text('.opis-wyboru >> nth=0')
       p.check('[data-f=podProjekt]')
-      p.fill('[data-f=projekt]', 'P-500')
-      m = p.locator('[data-model]').first
-      m.fill('LG 55UH5N · 55UH5N-E')
-      p.wait_for_timeout(100)
+      p.locator('.pole-projekt button:has-text("Nowy")').click()
+      p.fill('#modal input[name=numer]', 'P-500')
+      p.fill('#modal input[name=nazwa]', 'Biuro testowe – sala A')
+      okno_przycisk(p, 'Zapisz projekt')
+      p.wait_for_timeout(150)
+      assert p.locator('[data-f=projekt]').input_value() == 'P-500'
+      wybierz(p, '[data-model]', 'uh5n')
+      assert p.locator('[data-model]').first.input_value().startswith('LG 55UH5N')
+      assert p.evaluate('document.activeElement.dataset.p') == '0:lok', 'po wyborze modelu kursor powinien przejść do lokalizacji'
       sn = p.locator('textarea[data-p$=":snTekst"]').first
       sn.fill('LGSN-100')
       p.locator('[data-p$=":lok"]').first.fill('Regał B')
@@ -183,9 +239,20 @@ with sync_playwright() as pw:
 
       # wydanie zastępcze: sprzęt z P-500 na P-600
       p.click('.szybkie button:has-text("Wydanie")')
-      p.fill('[data-f=projekt]', 'P-600')
-      p.wait_for_timeout(600)
-      p.fill('[data-f=klientNazwa]', 'Klient Testowy Sp. z o.o.')
+      wybierz(p, '[data-f=projekt]', 'P-600')  # nie ma na liście → okno nowego projektu
+      p.wait_for_selector('#modal input[name=nazwa]')
+      assert p.locator('#modal input[name=numer]').input_value() == 'P-600'
+      p.fill('#modal input[name=nazwa]', 'Klient Testowy – serwerownia')
+      p.fill('#modal input[name=klientNazwa]', 'Klient Testowy Sp. z o.o.')
+      p.keyboard.press('Escape')  # zamyka listę, nie okno
+      assert p.locator('#modal .okno').count() == 1
+      p.fill('#modal input[name=adres]', 'ul. Testowa 1, Warszawa')
+      p.keyboard.press('Escape')
+      okno_przycisk(p, 'Zapisz projekt')
+      p.wait_for_timeout(200)
+      assert p.locator('[data-f=projekt]').input_value() == 'P-600'
+      assert p.locator('[data-f=klientNazwa]').input_value() == 'Klient Testowy Sp. z o.o.'
+      assert p.locator('[data-f=adres]').input_value() == 'ul. Testowa 1, Warszawa'
       p.locator('tr:has-text("LGSN-100") button:has-text("Dodaj")').click()
       p.locator('tr:has-text("LGSN-001") button:has-text("Dodaj")').click()
       p.locator('tr:has-text("Cat6A") button:has-text("Dodaj")').click()
@@ -207,8 +274,8 @@ with sync_playwright() as pw:
 
       # zwrot kabla
       p.click('.szybkie button:has-text("Zwrot")')
-      p.fill('[data-f=projekt]', 'P-600')
-      p.wait_for_timeout(600)
+      wybierz(p, '[data-f=projekt]', 'serwerow')
+      p.wait_for_selector('h3:has-text("Wydane na projekt P-600 – Klient Testowy – serwerownia")')
       p.locator('tr:has-text("Cat6A") button:has-text("Dodaj")').click()
       p.locator('[data-p="0:ilosc"]').fill('20')
       p.locator('[data-p="0:lok"]').fill('Regał K')
@@ -219,7 +286,8 @@ with sync_playwright() as pw:
       # zły PIN jest odrzucany
       p.click('.szybkie button:has-text("Zwrot")')
       p.fill('[data-f=projekt]', 'P-600')
-      p.wait_for_timeout(600)
+      p.keyboard.press('Tab')  # wyjście z pola też pokazuje listę wydanego sprzętu
+      p.wait_for_selector('tr:has-text("LGSN-001") button:has-text("Dodaj")')
       p.locator('tr:has-text("LGSN-001") button:has-text("Dodaj")').click()
       p.locator('[data-p="0:lok"]').fill('Regał A')
       p.locator('.stopka-formularza button.glowny').click()
@@ -239,6 +307,11 @@ with sync_playwright() as pw:
       st = {m: (w, pp, wy) for m, w, pp, wy in stan['stany']}
       assert st['55UH5N'] == (2, 0, 2), st
       assert st['Cat6A F/UTP'] == (900, 0, 100), st
+      projekty = p.evaluate('() => window.MagazynCore.listaProjektow(window.MagazynApp.app.st).map(x => [x.numer, x.nazwa, x.klientNazwa])')
+      assert ['P-600', 'Klient Testowy – serwerownia', 'Klient Testowy Sp. z o.o.'] in projekty, projekty
+      assert ['P-500', 'Biuro testowe – sala A', ''] in projekty, projekty
+      pz = p.evaluate('() => [...window.MagazynApp.app.st.dokumenty.values()].map(d => d.ev.dane).find(d => d.rodzaj === "PZ")')
+      assert pz['dostawcaId'] == 'wb-polsound' and pz['dostawcaDane']['nip'] == '5260307175' and pz['projektNazwa'] == 'Biuro testowe – sala A', pz
 
       # odświeżenie strony = ponowny odczyt plików z folderu
       p.goto(URL + '?opfs=1')
@@ -254,6 +327,33 @@ with sync_playwright() as pw:
           p.locator('.karta-btn.z-tekstem').click()
       assert okno.value.url.startswith('https://www.lg.com/'), okno.value.url
       okno.value.close()
+      zapytania = []
+      def bialа_lista(route):
+          zapytania.append(route.request.url)
+          route.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
+                        body=json.dumps({'result': {'subject': {'name': 'MAASCK SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ', 'nip': '7011115199', 'statusVat': 'Czynny', 'regon': '523695017', 'krs': '0001002721', 'workingAddress': 'PIĘKNA 24/26A, 00-549 WARSZAWA', 'residenceAddress': None}}}))
+      ctx.route('https://wl-api.mf.gov.pl/**', bialа_lista)
+      p.click('nav a[data-w=dostawcy]')
+      p.click('button:has-text("Nowy dostawca")')
+      p.fill('#modal input[name=nip]', '701-111-51-98')
+      assert p.locator('#modal >> text=nieprawidłowy NIP').count() == 1
+      p.fill('#modal input[name=nip]', '701-111-51-99')
+      p.click('#modal button:has-text("Pobierz z rejestru")')
+      p.wait_for_selector('#modal >> text=Pobrano z wykazu podatników VAT')
+      assert '/api/search/nip/7011115199?date=' in zapytania[0], zapytania
+      assert p.locator('#modal input[name=nazwa]').input_value() == 'Maasck'
+      assert p.locator('#modal input[name=adres]').input_value() == 'Piękna 24/26A, 00-549 Warszawa'
+      assert p.locator('#modal input[name=krs]').input_value() == '0001002721'
+      p.screenshot(path=ZRZUTY / '16-nowy-dostawca.png')
+      okno_przycisk(p, 'Zapisz dostawcę')
+      p.wait_for_selector('td:has-text("Maasck")')
+      # duplikat NIP-u w bibliotece jest blokowany
+      p.click('button:has-text("Nowy dostawca")')
+      p.fill('#modal input[name=nazwa]', 'Aplauz drugi raz')
+      p.fill('#modal input[name=nip]', '1181710940')
+      okno_przycisk(p, 'Zapisz dostawcę')
+      p.wait_for_selector('#modal >> text=Ten NIP ma już dostawca')
+      okno_przycisk(p, 'Anuluj')
       p.click('nav a[data-w=dziennik]')
       p.screenshot(path=ZRZUTY / '15-dziennik.png')
       with p.expect_download() as dl:

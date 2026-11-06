@@ -26,6 +26,12 @@ Przy kolejnym uruchomieniu wystarczy przycisk „Połącz ponownie”. Przycisk 
 
 W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dymek po najechaniu), przycisk **Pomoc** z pełną instrukcją oraz klawisz **F1**. Do każdego modelu można dodać **kartę katalogową**: link do strony producenta albo plik PDF zapisany w folderze `karty/`. Kartę otwierasz potem jednym kliknięciem z kartoteki, stanu magazynu i dokumentów.
 
+**Projekty** mają numer i nazwę (np. „P-2026-014 – Kancelaria Beta”), klienta i adres obiektu. W formularzach projekt wybiera się z listy, szukając po kawałku numeru albo nazwy. Przy wydaniu klient i adres wpisują się same. Nowy numer wpisany w dokumencie wywołuje przy zapisie pytanie o nazwę projektu.
+
+**Dostawcy** to biblioteka z danymi z rejestrów KRS i REGON: pełna nazwa, NIP, REGON, KRS i adres. Na start są w niej Aplauz Audio, Polsound, Suprema Polska, Konsbud Audio, Sony i Samsung, wszyscy ze sprawdzoną sumą kontrolną NIP i REGON. Przy przyjęciu dostawcę wybiera się z listy, a jego dane trafiają na formularz PZ. W oknie dostawcy i klienta przycisk **Pobierz z rejestru** uzupełnia dane po NIP z publicznego wykazu podatników VAT Ministerstwa Finansów (potrzebny internet).
+
+**Listy rozwijane** zastępują wpisywanie: projekt, dostawca, klient, model, lokalizacja, adres i osoba. Kliknij pole albo zacznij pisać, wybierz strzałkami i zatwierdź Enterem. Obok pól projektu, dostawcy, klienta i modelu jest przycisk **Nowy**.
+
 Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z akcją „Przenieś”, urządzenia z historią po numerze seryjnym, raporty, kartoteka modeli, klienci, dziennik zmian, kontrola spójności i eksport każdej listy do Excela. Każdy dokument zapisuje się po potwierdzeniu PIN-em i drukuje jako formularz do podpisu z nagłówkiem firmy i kodem QR.
 
 ## Zasady przechowywania danych
@@ -40,7 +46,7 @@ Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z a
 Magazyn AV/
 ├── Magazyn.html
 ├── dokumenty/2026/     BO, PZ, WZ, WZZ, ZW – jeden plik na dokument
-├── zdarzenia/2026-11/  kartoteka, klienci, użytkownicy, przeniesienia, anulowania, skany
+├── zdarzenia/2026-11/  kartoteka, projekty, klienci, dostawcy, użytkownicy, przeniesienia, anulowania, skany
 ├── podpisane/2026/     skany podpisanych formularzy
 ├── karty/              karty katalogowe (PDF) dołączone do modeli
 ├── eksporty/           kopie eksportów do Excela
@@ -61,7 +67,7 @@ npm run build         # buduje dist/Magazyn.html
 python3 test/e2e.py   # test w przeglądarce (Playwright + Chrome)
 ```
 
-- `src/core.js`: logika bez interfejsu (zdarzenia, stany, walidacja, kontrola spójności).
+- `src/core.js`: logika bez interfejsu (zdarzenia, stany, walidacja, kontrola spójności, rejestr projektów, wbudowana biblioteka dostawców, sprawdzanie NIP i REGON).
 - `src/storage.js`: zapis do folderu (File System Access API) i do pamięci (tryb demo).
 - `src/xlsx.js`: eksport do Excela bez bibliotek.
 - `src/app.js` i `src/styles.css`: interfejs.

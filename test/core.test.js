@@ -198,3 +198,69 @@ test('podpowiedzi i nowe wartości', async () => {
   assert.equal(C.czyNowaWartosc(p.lokalizacje, 'regał a,  półka 2'), false);
   assert.equal(C.czyNowaWartosc(p.lokalizacje, 'Regał B'), true);
 });
+
+test('wbudowana biblioteka dostawców: poprawne NIP i REGON, unikalne identyfikatory', () => {
+  const id = new Set();
+  for (const d of C.DOSTAWCY_WBUDOWANI) {
+    assert.ok(C.poprawnyNip(d.nip), d.nazwa + ': NIP ' + d.nip);
+    assert.ok(C.poprawnyRegon(d.regon), d.nazwa + ': REGON ' + d.regon);
+    assert.match(d.krs, /^\d{10}$/, d.nazwa + ': KRS');
+    assert.ok(!id.has(d.dostawcaId));
+    id.add(d.dostawcaId);
+  }
+  assert.ok(C.poprawnyNip('PL 701-111-51-99')); // MAASCK
+  assert.ok(!C.poprawnyNip('7011115198'));
+  assert.ok(C.poprawnyRegon('523695017'));
+  assert.ok(!C.poprawnyRegon('523695018'));
+});
+
+test('dostawcy: biblioteka + własne zmiany i nowi dostawcy', async () => {
+  const z = await baza();
+  let st = C.zbudujStan(z);
+  assert.ok(st.dostawcy.get('wb-polsound').wbudowany);
+  assert.equal(C.dostawcaWgNazwy(st, 'polsound').nip, '5260307175');
+  assert.equal(C.dostawcaWgNazwy(st, 'POLSOUND SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ').dostawcaId, 'wb-polsound');
+  await dodaj(z, C.noweZdarzenie(st, 'DOSTAWCA', 'u1', { dostawcaId: 'wb-polsound', tel: '22 000 00 00' }, teraz()));
+  st = C.zbudujStan(z);
+  await dodaj(z, C.noweZdarzenie(st, 'DOSTAWCA', 'u1', { dostawcaId: 'd-1', nazwa: 'Hurtownia Kabli', nip: '1234563218' }, teraz()));
+  await dodaj(z, C.noweZdarzenie(C.zbudujStan(z), 'DOSTAWCA', 'u1', { dostawcaId: 'wb-sony', aktywny: false }, teraz()));
+  st = C.zbudujStan(z);
+  const p = st.dostawcy.get('wb-polsound');
+  assert.equal(p.tel, '22 000 00 00');
+  assert.equal(p.nip, '5260307175'); // pozostałe dane z biblioteki zostają
+  const pod = C.podpowiedzi(st);
+  assert.ok(pod.dostawcy.includes('Hurtownia Kabli'));
+  assert.ok(pod.dostawcy.includes('Polsound'));
+  assert.ok(!pod.dostawcy.includes('Sony')); // ukryty
+  assert.equal(st.problemy.length, 0);
+});
+
+test('projekty: numer + nazwa, wyszukiwanie po nazwie, nazwa z dokumentu', async () => {
+  const z = await baza();
+  let st = C.zbudujStan(z);
+  await dodaj(z, C.noweZdarzenie(st, 'PROJEKT', 'u1', { projektId: 'pr1', numer: 'P-2026-014', nazwa: 'Kancelaria Beta – sale konferencyjne', klientNazwa: 'Beta Sp. z o.o.', adres: 'ul. Prosta 2' }, teraz()));
+  st = C.zbudujStan(z);
+  assert.equal(C.nazwaProjektu(st, ' p-2026-014 '), 'Kancelaria Beta – sale konferencyjne');
+  assert.equal(C.opisProjektu(st, 'P-2026-014'), 'P-2026-014 – Kancelaria Beta – sale konferencyjne');
+  assert.ok(C.podpowiedzi(st).projekty.includes('P-2026-014'));
+  assert.ok(!C.czyNowaWartosc(C.podpowiedzi(st).projekty, 'P-2026-014'));
+  // dokument z nazwą projektu spoza rejestru
+  const r = await dokument(z, { rodzaj: 'PZ', data: '2026-11-06', dostawca: 'Polsound', projekt: 'P-2026-020', projektNazwa: 'Hotel Gamma', pozycje: [{ modelId: 'tv', sn: 'X1', lok: 'A', projekt: 'P-2026-020' }] });
+  assert.ok(r.ev, JSON.stringify(r.bledy));
+  st = C.zbudujStan(z);
+  assert.equal(C.nazwaProjektu(st, 'P-2026-020'), 'Hotel Gamma');
+  const lista = C.listaProjektow(st);
+  assert.deepEqual(lista.map((p) => p.numer), ['P-2026-020', 'P-2026-014']);
+  assert.equal(lista[0].wRejestrze, false);
+  assert.equal(lista[1].klientNazwa, 'Beta Sp. z o.o.');
+  // zmiana nazwy w rejestrze wygrywa z nazwą z dokumentu
+  await dodaj(z, C.noweZdarzenie(st, 'PROJEKT', 'u1', { projektId: 'pr2', numer: 'P-2026-020', nazwa: 'Hotel Gamma – sala balowa' }, teraz()));
+  st = C.zbudujStan(z);
+  assert.equal(C.nazwaProjektu(st, 'P-2026-020'), 'Hotel Gamma – sala balowa');
+  assert.match(C.opisZdarzenia(st, r.ev), /Hotel Gamma – sala balowa/);
+  // wyszukiwanie bez ogonków
+  assert.ok(C.pasujeDo('sala bal', C.opisProjektu(st, 'P-2026-020')));
+  assert.ok(C.pasujeDo('lomianki', 'ul. Graniczna 19, 05-092 Łomianki'));
+  assert.ok(!C.pasujeDo('hotel delta', 'Hotel Gamma'));
+  assert.equal(st.problemy.length, 0);
+});

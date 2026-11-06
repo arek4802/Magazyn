@@ -189,7 +189,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .tabela td { padding: 9px 12px; border-bottom: 1px solid #eef0f5; vertical-align: middle; }
 .tabela tr:last-child td { border-bottom: 0; }
 .tabela .l { text-align: right; white-space: nowrap; }
-.tabela tr[data-a] { cursor: pointer; }
+.tabela tr[data-a], .tabela tr.klikalny { cursor: pointer; }
 .tabela tbody tr:hover td { background: #f8f9ff; }
 .tabela tr.anulowany td { color: #9a9cae; text-decoration: line-through; }
 .tabela tr.anulowany td .znaczek { text-decoration: none; }
@@ -227,6 +227,48 @@ input.pin { font-size: 22px; letter-spacing: .4em; text-align: center; width: 19
 .wiersz-modelu, .wiersz-linku { display: flex; align-items: center; gap: 8px; }
 .wiersz-modelu input, .wiersz-linku input { flex: 1; }
 .wiersz-modelu .karta-btn { margin-left: 0; padding: 7px 9px; }
+.wiersz-modelu .wiersz-wyboru, .wiersz-modelu > .wybierak { flex: 1; min-width: 0; }
+.pole.szerokie-2 { grid-column: span 2; }
+.pole-projekt .wejscie-projekt { flex: 1; max-width: none; min-width: 0; }
+.pole-projekt .wiersz-projekt { align-items: flex-start; }
+.pole-projekt .wiersz-projekt > .przelacznik { min-height: 38px; }
+
+/* pole wyboru z listy */
+.wybierak { position: relative; min-width: 0; }
+.wiersz-wyboru > .wybierak, .wiersz-modelu > .wybierak, .wejscie-projekt .wybierak, .wiersz.filtr-wyboru .wybierak { flex: 1; }
+.wybierak input { width: 100%; padding-right: 34px; }
+.wybierak-rozwin { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 32px; border: 0; background: transparent; color: var(--szary); cursor: pointer; border-radius: 0 8px 8px 0; display: grid; place-items: center; }
+.wybierak-rozwin:hover { color: var(--marka); background: var(--marka-tlo); }
+.wybierak-rozwin .ik { width: 16px; height: 16px; }
+.wybierak input[aria-expanded=true] { border-color: var(--marka); box-shadow: 0 0 0 3px rgba(2, 1, 149, .14); }
+.wiersz-wyboru { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.przycisk.maly.nowy-obok { padding: 8px 10px; gap: 4px; }
+.przycisk.maly.nowy-obok .ik { width: 15px; height: 15px; }
+.opis-wyboru { font-size: 12px; color: var(--szary); min-height: 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.opis-wyboru:empty { display: none; }
+.opis-wyboru .ik { width: 14px; height: 14px; color: var(--marka); }
+.opis-wyboru b { color: var(--tekst); font-weight: 600; }
+.lista-wyboru { position: fixed; z-index: 90; background: #fff; border: 1px solid var(--linia-mocna); border-radius: 10px; box-shadow: 0 12px 32px rgba(8, 7, 60, .18), 0 2px 6px rgba(8, 7, 60, .08); overflow-y: auto; padding: 4px; }
+.lista-wyboru .opcja { padding: 7px 10px; border-radius: 7px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.lista-wyboru .opcja-t { font-weight: 600; }
+.lista-wyboru .opcja small { color: var(--szary); font-size: 12px; line-height: 1.35; }
+.lista-wyboru .opcja:hover { background: #f3f4fa; }
+.lista-wyboru .opcja.aktywna { background: var(--marka-tlo); box-shadow: inset 3px 0 0 var(--marka); }
+.lista-wyboru .opcja.wyszarzona .opcja-t { color: var(--szary); }
+.lista-wyboru mark { background: var(--akcent-tlo); color: inherit; border-radius: 3px; padding: 0 1px; }
+.lista-wyboru .opcja.dodaj { flex-direction: row; align-items: center; gap: 8px; color: var(--marka); font-weight: 600; border-top: 1px solid var(--linia); border-radius: 0 0 7px 7px; margin-top: 4px; padding-top: 9px; }
+.lista-wyboru .opcja.dodaj:first-child { border-top: 0; margin-top: 0; }
+.lista-wyboru .opcja-info { padding: 8px 10px; color: var(--szary); font-size: 12.5px; }
+.filtr-wyboru { min-width: 380px; }
+.filtr-wyboru .wybierak { min-width: 300px; }
+.proj { display: inline-flex; flex-direction: column; line-height: 1.3; }
+.proj small { color: var(--szary); font-size: 12px; white-space: normal; }
+.nazwa-proj { color: var(--szary); font-size: 12px; }
+.blok { display: block; }
+.ostrz-tekst { color: var(--pomarancz); font-weight: 600; }
+.ok-tekst { color: var(--zielony); font-weight: 600; }
+.info-nip { font-size: 12px; color: var(--szary); }
+.info-nip a { font-weight: 600; }
 .plik-karty { flex: 1; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; }
 .plik-karty .ik { color: var(--marka); }
 h3.sekcja { margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--linia); color: var(--marka); text-transform: uppercase; font-size: 12px; letter-spacing: .06em; }
@@ -294,6 +336,8 @@ dl.opis dd { margin: 0; }
   .glowna { height: auto; }
   .dwie-kolumny { grid-template-columns: 1fr; }
   .pole-projekt { grid-column: auto; }
+  .pole.szerokie-2 { grid-column: auto; }
+  .filtr-wyboru { min-width: 0; }
 }
 
 /* ---------------------------------------------------------------- wydruk */

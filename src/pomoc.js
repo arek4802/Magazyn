@@ -14,7 +14,9 @@
     uzupelnienia: 'Sprzęt kupiony pod projekt, który poszedł wydaniem zastępczym (WZZ) na inny projekt. Pozycja zostaje na liście, dopóki ktoś nie oznaczy jej jako uzupełnionej.',
     raporty: 'Gotowe zestawienia. Każde można wyeksportować do Excela przyciskiem w prawym górnym rogu.',
     kartoteka: 'Lista modeli, które mogą leżeć w magazynie. Model dodajesz raz, potem wybierasz go w dokumentach.',
-    klienci: 'Lista firm, do których wydajecie sprzęt. Nie jest obowiązkowa – przy wydaniu można wpisać dowolną nazwę.',
+    klienci: 'Lista firm, do których wydajecie sprzęt. Nie jest obowiązkowa – przy wydaniu można wpisać dowolną nazwę. Dane firmy pobierzesz po NIP z rejestru.',
+    projekty: 'Rejestr projektów: numer, nazwa, klient i adres obiektu. Projekt możesz potem wybierać z listy po numerze albo po nazwie, a przy wydaniu klient i adres wpiszą się same.',
+    dostawcy: 'Biblioteka dostawców z danymi z rejestrów (pełna nazwa, NIP, REGON, KRS, adres). Przy przyjęciu wybierasz dostawcę z listy, a jego dane trafiają na formularz.',
     dziennik: 'Każda operacja z autorem, datą i godziną. Niczego nie da się z niego usunąć.',
     problemy: 'Aplikacja przy każdym odczycie sprawdza, czy pliki w folderze nie zostały zmienione, usunięte albo zdublowane przez OneDrive.',
     ustawienia: 'Użytkownicy, zmiana PIN-u, kopia zapasowa i informacje o folderze.',
@@ -27,18 +29,22 @@
     ZW: 'Zwrot z projektu: nadwyżki materiału albo niewykorzystane urządzenia wracają do magazynu.',
     // pola
     podProjekt: 'Zaznacz, jeśli towar był zamówiony pod konkretny projekt. Taki sprzęt jest zarezerwowany: zwykłe wydanie na inny projekt będzie wymagało wydania zastępczego (WZZ).',
-    projektNumer: 'Numer projektu wpisujesz ręcznie. Aplikacja podpowiada numery, które już były użyte – wybierz z listy, żeby uniknąć literówek.',
-    lokalizacja: 'Miejsce w magazynie, np. „Regał A, półka 2”. Podpowiadane są lokalizacje już używane. Nowa lokalizacja wymaga potwierdzenia przy zapisie.',
+    projektNumer: 'Wybierz projekt z listy – możesz wpisać kawałek numeru albo nazwy (np. „kancelaria”). Nowy projekt dodasz przyciskiem „Nowy”; jeśli wpiszesz nowy numer, przy zapisie aplikacja zapyta o nazwę.',
+    projektNazwa: 'Nazwa, po której łatwiej znaleźć projekt, np. „Kancelaria Beta – sale konferencyjne”. Widać ją na listach, w raportach i na wydrukach obok numeru.',
+    projektStatus: '„Zakończony” chowa projekt na koniec list wyboru i domyślnie w rejestrze. Dokumenty i historia zostają bez zmian.',
+    bialaLista: 'Wpisz NIP i kliknij „Pobierz z rejestru” – nazwa, adres, REGON i KRS pobiorą się z publicznego wykazu podatników VAT Ministerstwa Finansów. Wymaga internetu.',
+    nip: 'NIP sprawdzany jest sumą kontrolną, więc literówka zostanie od razu wychwycona.',
+    lokalizacja: 'Miejsce w magazynie, np. „Regał A, półka 2”. Wybierz z listy (widać, ile pozycji tam leży) albo wpisz nowe miejsce – nowa lokalizacja wymaga potwierdzenia przy zapisie.',
     numerySeryjne: 'Jeden numer w linii. Możesz wkleić całą kolumnę z Excela albo listy przewozowej – liczba sztuk policzy się sama.',
     ilosc: 'Ilość w jednostce modelu (szt. albo metry). Jeśli model ma jednostkę zakupu, np. szpulę, możesz ją wybrać – aplikacja przeliczy na metry.',
     stanTech: 'Stan urządzenia: nowe, używane (np. po zwrocie z budowy) albo uszkodzone.',
     gwarancja: 'Data końca gwarancji, jeśli jest znana. Pole nieobowiązkowe.',
-    klient: 'Wybierz firmę z listy klientów albo wpisz dowolną nazwę. Jeśli firma jest na liście, na formularzu pojawi się jej NIP i adres.',
-    adresObiektu: 'Gdzie fizycznie jedzie sprzęt, np. adres budowy i sala.',
+    klient: 'Wybierz firmę z listy klientów albo wpisz dowolną nazwę. Jeśli firma jest na liście, na formularzu pojawi się jej NIP i adres. Po wyborze projektu klient wpisze się sam.',
+    adresObiektu: 'Gdzie fizycznie jedzie sprzęt, np. adres budowy i sala. Jeśli projekt ma zapisany adres, wpisze się sam.',
     pobierajacy: 'Kto odbiera sprzęt z magazynu (np. technik). Ta osoba podpisuje formularz.',
     powodWzz: 'Napisz krótko, dlaczego sprzęt z innego projektu idzie tutaj, np. „pilna wymiana u klienta”. Powód będzie na wydruku i w raporcie.',
     wyborZMagazynu: 'Na górze listy jest sprzęt kupiony pod ten projekt, potem wolny. Sprzęt z innych projektów jest na czerwono – jego wydanie będzie zastępcze.',
-    dostawca: 'Nazwa dostawcy. Podpowiadani są dostawcy z wcześniejszych przyjęć.',
+    dostawca: 'Wybierz dostawcę z biblioteki (zacznij pisać nazwę albo markę, np. „shure”). Pełna nazwa, NIP i adres dostawcy trafią na formularz. Nowego dostawcę dodasz przyciskiem „Nowy”.',
     nrFaktury: 'Numer faktury albo dokumentu WZ dostawcy – ułatwia późniejsze odszukanie dostawy.',
     seryjny: 'Zaznacz dla urządzeń z gwarancją, które trafiają do klienta – każda sztuka będzie śledzona osobno. Materiałów (kable, korytka, złącza) nie śledzi się po numerze.',
     jednostka: 'Sztuki albo metry. Kable i korytka liczymy w metrach.',
@@ -67,16 +73,16 @@
     { id: 'przyjecie', tytul: 'Przyjęcie towaru (PZ)', html: `
       <p>Gdy przyjedzie dostawa, kliknij <b>Przyjęcie</b>.</p>
       <ol>
-        <li>Wpisz dostawcę i numer faktury albo WZ dostawcy.</li>
-        <li>Jeśli towar jest zamówiony pod konkretny projekt, zaznacz <b>Kupione pod projekt</b> i wpisz jego numer. Ten sprzęt będzie zarezerwowany dla projektu.</li>
+        <li>Wybierz dostawcę z listy (biblioteka dostawców) i wpisz numer faktury albo WZ dostawcy.</li>
+        <li>Jeśli towar jest zamówiony pod konkretny projekt, zaznacz <b>Kupione pod projekt</b> i wybierz projekt z listy (po numerze albo nazwie). Ten sprzęt będzie zarezerwowany dla projektu.</li>
         <li>Dla każdej pozycji wybierz model (zacznij pisać nazwę), wpisz lokalizację i numery seryjne (jeden w linii, można wkleić) albo ilość.</li>
-        <li>Brakuje modelu? Kliknij „Dodaj do kartoteki” – model zapisze się i od razu wskoczy do pozycji.</li>
+        <li>Brakuje modelu? Kliknij <b>Nowy</b> obok pola modelu – model zapisze się w kartotece i od razu wskoczy do pozycji.</li>
         <li>Kliknij <b>Zapisz dokument</b>, potwierdź PIN-em, wydrukuj formularz i daj do podpisu.</li>
       </ol>` },
     { id: 'wydanie', tytul: 'Wydanie na projekt (WZ)', html: `
       <p>Gdy sprzęt jedzie do klienta, kliknij <b>Wydanie</b>.</p>
       <ol>
-        <li>Wpisz numer projektu i klienta (z listy albo dowolną nazwę), adres obiektu i osobę, która odbiera sprzęt.</li>
+        <li>Wybierz projekt z listy (po numerze albo nazwie) – klient i adres obiektu wpiszą się same, jeśli projekt je ma. Uzupełnij osobę, która odbiera sprzęt.</li>
         <li>W tabeli „Dostępne w magazynie” kliknij <b>Dodaj</b> przy potrzebnym sprzęcie. Sprzęt kupiony pod ten projekt jest na górze listy.</li>
         <li>Przy materiałach (kable, korytka) wpisz wydawaną ilość.</li>
         <li>Zapisz, potwierdź PIN-em i wydrukuj formularz do podpisu.</li>
@@ -90,7 +96,7 @@
         <li>Sprzęt trafi na listę <b>Do uzupełnienia</b>. Gdy dokupicie go pod projekt X, kliknij tam „Uzupełnione…” i wpisz np. numer nowego PZ.</li>
       </ul>` },
     { id: 'zwrot', tytul: 'Zwrot z projektu (ZW)', html: `
-      <p>Gdy z budowy wraca nadwyżka materiału albo niewykorzystane urządzenie, kliknij <b>Zwrot</b>, wpisz numer projektu i wybierz z listy, co wraca. Przy urządzeniach zaznacz stan (np. używany), przy materiałach wpisz ilość. Każdej pozycji podaj lokalizację, w której ją odkładasz.</p>` },
+      <p>Gdy z budowy wraca nadwyżka materiału albo niewykorzystane urządzenie, kliknij <b>Zwrot</b>, wybierz projekt i zaznacz na liście, co wraca. Przy urządzeniach zaznacz stan (np. używany), przy materiałach wpisz ilość. Każdej pozycji podaj lokalizację, w której ją odkładasz.</p>` },
     { id: 'przenies', tytul: 'Przenoszenie w magazynie', html: `
       <p>W widoku <b>Lokalizacje</b> kliknij <b>Przenieś</b> przy pozycji i wpisz nową lokalizację. To nie jest dokument do podpisu – zmiana zapisuje się w dzienniku z Twoim nazwiskiem.</p>` },
     { id: 'podpisy', tytul: 'Wydruki i podpisy', html: `
@@ -107,6 +113,15 @@
         <li><b>Opakowanie zakupu</b> (tylko materiały) pozwala przyjmować np. kabel w szpulach: zaznacz „kupujecie w opakowaniach”, wpisz „szpula” i 305, a przy przyjęciu aplikacja przeliczy szpule na metry. Przy urządzeniach z numerem seryjnym tego pola nie ma.</li>
         <li><b>Karta katalogowa:</b> wklej link ze strony producenta albo dołącz plik PDF. Przycisk „Szukaj w internecie” otworzy wyszukiwarkę z nazwą modelu. Kartę otworzysz potem jednym kliknięciem w kartotece, stanie magazynu i dokumentach (ikona <b>karty</b>).</li>
         <li>Status <b>EOL</b> oznacza model wycofany przez producenta – zobaczysz go w raporcie „EOL na stanie”.</li>
+      </ul>` },
+    { id: 'projekty', tytul: 'Projekty, klienci i dostawcy', html: `
+      <ul>
+        <li><b>Projekty.</b> W widoku <b>Projekty</b> każdy projekt ma numer i nazwę (np. „P-2026-014 – Kancelaria Beta”), klienta i adres obiektu. W formularzach wybierasz projekt z listy – wystarczy wpisać kawałek numeru <i>albo nazwy</i>. Przy wydaniu klient i adres wpiszą się same.</li>
+        <li>Jeśli w formularzu wpiszesz numer, którego jeszcze nie było, przy zapisie aplikacja zapyta o nazwę projektu. Możesz też od razu kliknąć <b>Nowy</b> obok pola.</li>
+        <li>Kliknij projekt w rejestrze, żeby zobaczyć wszystko w jednym miejscu: dokumenty, co czeka pod projekt w magazynie i co zostało wydane. Stamtąd jednym kliknięciem zaczniesz wydanie albo zwrot.</li>
+        <li><b>Dostawcy.</b> Biblioteka ma już wpisanych głównych dystrybutorów AV (m.in. Aplauz Audio, Polsound, Suprema Polska, Konsbud Audio, Sony, Samsung) z danymi z rejestrów KRS i REGON. Dane można poprawić; nowego dostawcę dodasz przyciskiem „Nowy dostawca”.</li>
+        <li><b>Pobieranie danych po NIP.</b> W oknie dostawcy i klienta wpisz NIP i kliknij <b>Pobierz z rejestru</b> – pełna nazwa, adres, REGON i KRS pobiorą się z wykazu podatników VAT (wymaga internetu). NIP jest sprawdzany sumą kontrolną.</li>
+        <li><b>Listy rozwijane.</b> Pola z ikoną strzałki to listy: kliknij albo zacznij pisać, strzałkami wybierz pozycję i zatwierdź Enterem. Przy kliencie, adresie i lokalizacji możesz też wpisać zupełnie nową wartość.</li>
       </ul>` },
     { id: 'raporty', tytul: 'Wyszukiwanie, raporty i Excel', html: `
       <ul>

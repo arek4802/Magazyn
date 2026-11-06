@@ -43,6 +43,14 @@
     await dodaj(C.noweZdarzenie(stan(), 'KLIENT', 'jkowalski', { klientId: 'k-alfa', nazwa: 'Alfa Nieruchomości Sp. z o.o.', nip: '5250000000', adres: 'ul. Przykładowa 1, 00-001 Warszawa', kontakt: 'Piotr Zieliński', tel: '600 000 000', email: '' }, krok(0.1)));
     await dodaj(C.noweZdarzenie(stan(), 'KLIENT', 'jkowalski', { klientId: 'k-szkola', nazwa: 'Szkoła Podstawowa nr 100', nip: '', adres: 'ul. Szkolna 5, 00-002 Warszawa', kontakt: '', tel: '', email: '' }, krok(0.1)));
 
+    const projekty = [
+      { projektId: 'pr-011', numer: 'P-2026-011', nazwa: 'SP 100 – modernizacja sal lekcyjnych', klientNazwa: 'Szkoła Podstawowa nr 100', adres: 'ul. Szkolna 5, 00-002 Warszawa', status: 'w toku', uwagi: '' },
+      { projektId: 'pr-012', numer: 'P-2026-012', nazwa: 'Alfa – biuro na 4. piętrze', klientNazwa: 'Alfa Nieruchomości Sp. z o.o.', adres: 'ul. Przykładowa 1, piętro 4', status: 'w toku', uwagi: '' },
+      { projektId: 'pr-014', numer: 'P-2026-014', nazwa: 'Kancelaria Beta – sale konferencyjne', klientNazwa: 'Alfa Nieruchomości Sp. z o.o.', adres: 'ul. Przykładowa 1, sale 2.10–2.12', status: 'w toku', uwagi: 'Sala zarządu + dwie sale spotkań' },
+      { projektId: 'pr-007', numer: 'P-2026-007', nazwa: 'Hotel Gamma – sala balowa', klientNazwa: '', adres: '', status: 'zakończony', uwagi: '' },
+    ];
+    for (const pr of projekty) await dodaj(C.noweZdarzenie(stan(), 'PROJEKT', 'jkowalski', pr, krok(0.05)));
+
     async function dok(autor, dane, godzin) {
       const st = stan();
       const ev = C.przygotujDokument(st, autor, dane, krok(godzin));
@@ -62,7 +70,7 @@
       { modelId: 'm-uchwyt', ilosc: 3, lok: 'Regał C' },
     ] }, 24);
 
-    await dok('anowak', { rodzaj: 'PZ', data: dzien(), dostawca: 'Dystrybutor AV Sp. z o.o.', nrFaktury: 'FV/2026/11/0815', projekt: 'P-2026-014', osoba: 'Anna Nowak', pozycje: [
+    await dok('anowak', { rodzaj: 'PZ', data: dzien(), dostawca: 'Polsound', dostawcaId: 'wb-polsound', dostawcaDane: { pelnaNazwa: 'POLSOUND SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ', nip: '5260307175', adres: 'ul. Graniczna 17, 05-092 Łomianki' }, nrFaktury: 'FV/2026/11/0815', projekt: 'P-2026-014', projektNazwa: 'Kancelaria Beta – sale konferencyjne', osoba: 'Anna Nowak', pozycje: [
       { modelId: 'm-qm55', sn: '0PYK3HBW500201', lok: 'Regał A, półka 1', projekt: 'P-2026-014', stanTech: 'nowy' },
       { modelId: 'm-qm55', sn: '0PYK3HBW500202', lok: 'Regał A, półka 1', projekt: 'P-2026-014', stanTech: 'nowy' },
       { modelId: 'm-mxa', sn: 'MXA9-4410337', lok: 'Regał B, półka 2', projekt: 'P-2026-014', stanTech: 'nowy' },
@@ -70,14 +78,14 @@
       { modelId: 'm-cat6', ilosc: 610, lok: 'Regał K (kable)', projekt: 'P-2026-014' },
     ] }, 48);
 
-    await dok('jkowalski', { rodzaj: 'WZ', data: dzien(), projekt: 'P-2026-011', klientNazwa: 'Szkoła Podstawowa nr 100', klientAdres: 'ul. Szkolna 5, 00-002 Warszawa', adres: 'ul. Szkolna 5, sala A01.01', osoba: 'Marek Wiśniewski (technik)', pozycje: [
+    await dok('jkowalski', { rodzaj: 'WZ', data: dzien(), projekt: 'P-2026-011', projektNazwa: 'SP 100 – modernizacja sal lekcyjnych', klientNazwa: 'Szkoła Podstawowa nr 100', klientAdres: 'ul. Szkolna 5, 00-002 Warszawa', adres: 'ul. Szkolna 5, sala A01.01', osoba: 'Marek Wiśniewski (technik)', pozycje: [
       { modelId: 'm-tesira', sn: 'TFX4-22-01987', ilosc: 1, lok: 'Regał B, półka 1', projektZakupu: '' },
       { modelId: 'm-cat6', ilosc: 180, lok: 'Regał K (kable)', projektZakupu: '' },
       { modelId: 'm-hdmi3', ilosc: 6, lok: 'Regał K (kable)', projektZakupu: '' },
       { modelId: 'm-kor40', ilosc: 24, lok: 'Antresola', projektZakupu: '' },
     ] }, 30);
 
-    await dok('anowak', { rodzaj: 'WZZ', data: dzien(), projekt: 'P-2026-012', klientNazwa: 'Alfa Nieruchomości Sp. z o.o.', klientNip: '5250000000', klientAdres: 'ul. Przykładowa 1, 00-001 Warszawa', adres: 'ul. Przykładowa 1, piętro 4', osoba: 'Marek Wiśniewski (technik)', powod: 'Uszkodzony ekran u klienta, wymiana od ręki', pozycje: [
+    await dok('anowak', { rodzaj: 'WZZ', data: dzien(), projekt: 'P-2026-012', projektNazwa: 'Alfa – biuro na 4. piętrze', klientNazwa: 'Alfa Nieruchomości Sp. z o.o.', klientNip: '5250000000', klientAdres: 'ul. Przykładowa 1, 00-001 Warszawa', adres: 'ul. Przykładowa 1, piętro 4', osoba: 'Marek Wiśniewski (technik)', powod: 'Uszkodzony ekran u klienta, wymiana od ręki', pozycje: [
       { modelId: 'm-qm55', sn: '0PYK3HBW500202', ilosc: 1, lok: 'Regał A, półka 1', projektZakupu: 'P-2026-014' },
     ] }, 20);
 
@@ -85,7 +93,7 @@
     await dodaj(C.noweZdarzenie(stan(), 'SKAN', 'jkowalski', { docId: wz.id, numer: wz.dane.numer, plik: 'podpisane/demo/WZ-skan.pdf' }, krok(2)));
     await store.zapisz('podpisane/demo/WZ-skan.pdf', new Blob(['Przykładowy skan (tryb demo)'], { type: 'text/plain' }));
 
-    await dok('jkowalski', { rodzaj: 'ZW', data: dzien(), projekt: 'P-2026-011', osoba: 'Marek Wiśniewski (technik)', uwagi: 'Nadwyżka kabla po montażu', pozycje: [
+    await dok('jkowalski', { rodzaj: 'ZW', data: dzien(), projekt: 'P-2026-011', projektNazwa: 'SP 100 – modernizacja sal lekcyjnych', osoba: 'Marek Wiśniewski (technik)', uwagi: 'Nadwyżka kabla po montażu', pozycje: [
       { modelId: 'm-cat6', ilosc: 42.5, lok: 'Regał K (kable)' },
     ] }, 26);
 
