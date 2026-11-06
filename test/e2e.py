@@ -25,7 +25,8 @@ def nowa_strona(b):
     p.add_init_script('window.__druk = 0; window.print = () => { window.__druk++; };')
     p.on('pageerror', lambda e: bledy.append('pageerror: ' + str(e)))
     p.on('console', lambda m: bledy.append('console: ' + m.text) if m.type == 'error' else None)
-    p.on('dialog', lambda d: d.accept())
+    # natywne okienka (confirm/alert) są blokowane w podglądach plików – aplikacja nie może z nich korzystać
+    p.on('dialog', lambda d: (bledy.append('natywne okno: ' + d.message), d.dismiss()))
     return ctx, p
 
 
@@ -57,6 +58,28 @@ with sync_playwright() as pw:
       p.click('.osoba >> text=Jan Kowalski')
       p.wait_for_selector('.kafle')
       p.screenshot(path=ZRZUTY / '01-pulpit.png')
+      # wyjście z formularza: pusty – bez pytania, przyciskiem Wróć i przyciskiem przeglądarki
+      p.click('nav a[data-w=stan]')
+      p.click('.szybkie button:has-text("Przyjęcie")')
+      p.wait_for_selector('text=Przyjęcie zewnętrzne (PZ)')
+      p.click('text=← Wróć')
+      p.wait_for_selector('h1:has-text("Stan magazynu")')
+      p.click('.szybkie button:has-text("Przyjęcie")')
+      p.go_back()
+      p.wait_for_selector('h1:has-text("Stan magazynu")')
+      # wypełniony – pyta własnym oknem
+      p.click('.szybkie button:has-text("Wydanie")')
+      p.fill('[data-f=projekt]', 'P-1')
+      p.click('nav a[data-w=dokumenty]')
+      p.wait_for_selector('#modal >> text=Porzucić dokument?')
+      okno_przycisk(p, 'Wróć')
+      assert p.locator('h1:has-text("Wydanie na projekt")').count() == 1
+      p.click('nav a[data-w=dokumenty]')
+      okno_przycisk(p, 'Porzuć dokument')
+      p.wait_for_selector('h1:has-text("Dokumenty")')
+      p.go_back()
+      p.wait_for_selector('h1:has-text("Stan magazynu")')
+      p.click('nav a[data-w=pulpit]')
       for i, w in enumerate(['stan', 'lokalizacje', 'urzadzenia', 'dokumenty', 'uzupelnienia', 'raporty', 'kartoteka', 'klienci', 'dziennik', 'problemy', 'ustawienia']):
           p.click(f'nav a[data-w={w}]')
           p.wait_for_timeout(150)
@@ -192,6 +215,9 @@ with sync_playwright() as pw:
       okno_przycisk(p, 'Potwierdź')
       assert p.locator('text=Nieprawidłowy PIN').count() == 1
       okno_przycisk(p, 'Wróć')
+      p.click('.stopka-formularza >> text=Porzuć')
+      okno_przycisk(p, 'Porzuć dokument')
+      p.wait_for_selector('.kafle, h1')
 
       # stan po operacjach
       stan = p.evaluate('''() => { const A = window.MagazynApp.app, C = window.MagazynCore;

@@ -738,14 +738,14 @@
         pole('Uwagi', wejscie('uwagi', s.uwagi)) +
         '</div>';
       pozycje = (s.pozycje.length ? s.pozycje.map((p, i) => '<div class="pozycja"><div class="pozycja-nr">' + (i + 1) + '</div><div class="siatka">' +
-        '<div class="pole szerokie"><span>Model</span><b>' + esc(nazwaModelu(p.modelId)) + '</b>' + (p.sn ? ' · SN <span class="mono">' + esc(p.sn) + '</span>' : '') + '</div>' +
+        '<div class="pole szerokie"><span>Model</span><div><b>' + esc(nazwaModelu(p.modelId)) + '</b>' + (p.sn ? ' · SN <span class="mono">' + esc(p.sn) + '</span>' : '') + '</div></div>' +
         (p.sn ? pole('Stan po zwrocie', '<select data-p="' + i + ':stanTech">' + C.STANY_TECHNICZNE.map((x) => '<option ' + (p.stanTech === x ? 'selected' : '') + '>' + x + '</option>').join('') + '</select>') : pole('Ilość (wydano ' + fmtL(p.max) + ' ' + esc(jedn(p.modelId)) + ')', '<input data-p="' + i + ':ilosc" value="' + esc(p.ilosc) + '" inputmode="decimal">')) +
         pole('Lokalizacja *', '<input list="dl-lok" data-p="' + i + ':lok" value="' + esc(p.lok || '') + '" placeholder="gdzie odkładasz">') +
         '</div><button class="ikonowy" data-a="usunPoz" data-i="' + i + '">' + ikona('x') + '</button></div>').join('') : '<div class="pusto">Wybierz poniżej, co wraca z projektu</div>') + wyborZwrotu(s);
     }
     const tytuly = { PZ: 'Przyjęcie zewnętrzne (PZ)', BO: 'Bilans otwarcia (BO)', WZ: 'Wydanie na projekt (WZ / WZZ)', ZW: 'Zwrot z projektu (ZW)' };
     const podt = { PZ: 'Dostawa od dostawcy. Zaznacz projekt, jeśli sprzęt jest kupiony pod konkretny projekt.', BO: 'Inwentaryzacja startowa: wpisz wszystko, co fizycznie leży w magazynie, miejsce po miejscu.', WZ: 'Sprzęt jedzie do klienta. Jeśli wybierzesz sprzęt kupiony pod inny projekt, powstanie wydanie zastępcze (WZZ).', ZW: 'Nadwyżki materiału i niewykorzystane urządzenia wracające z projektu.' };
-    return datalisty() + naglowekWidoku(tytuly[r], podt[r], '<button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny" data-a="zapiszSzkic">Zapisz i drukuj</button>') +
+    return datalisty() + '<button class="przycisk tekstowy wstecz" data-a="wstecz">← Wróć</button>' + naglowekWidoku(tytuly[r], podt[r], '<button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny" data-a="zapiszSzkic">Zapisz i drukuj</button>') +
       '<section class="karta">' + naglowek + '</section>' +
       '<section class="karta"><h2>Pozycje</h2>' + pozycje + '</section>' +
       '<div class="stopka-formularza"><button class="przycisk" data-a="anulujSzkic">Porzuć</button><button class="przycisk glowny duzy" data-a="zapiszSzkic">Zapisz dokument (PIN) i drukuj</button></div>';
@@ -844,8 +844,7 @@
     try {
       const ev = await zapiszDokument(dane);
       app.szkic = null;
-      app.widok = 'dokumenty';
-      render();
+      pokazWidok('dokumenty', { zastap: true });
       toast('Zapisano ' + ev.dane.numer, 'ok');
       const w = await dialog({ tytul: 'Zapisano ' + esc(ev.dane.numer), tresc: '<p>Wydrukuj formularz i daj go do podpisu. Skan lub zdjęcie podpisanego formularza dołączysz później w widoku dokumentu.</p>', przyciski: [{ wartosc: 'zamknij', etykieta: 'Później' }, { wartosc: 'drukuj', etykieta: ikona('druk') + 'Drukuj formularz', klasa: 'glowny', submit: true }] });
       if (w === 'drukuj') drukuj(app.st.dokumenty.get(ev.id));
@@ -1138,7 +1137,10 @@
         if (C.normKlucz(doL) === C.normKlucz(lok)) throw new Error('To ta sama lokalizacja');
         const ilosc = sn ? 1 : Number(f.ilosc.value.replace(',', '.'));
         if (!(ilosc > 0) || ilosc > Number(il) + 1e-9) throw new Error('Nieprawidłowa ilość');
-        if (C.czyNowaWartosc(C.podpowiedzi(app.st).lokalizacje, doL) && !confirm('Lokalizacja „' + doL + '” pojawi się po raz pierwszy. Zgadza się?')) return false;
+        if (C.czyNowaWartosc(C.podpowiedzi(app.st).lokalizacje, doL) && f.dataset.potwierdzono !== C.normKlucz(doL)) {
+          f.dataset.potwierdzono = C.normKlucz(doL);
+          throw new Error('Lokalizacja „' + doL + '” pojawi się po raz pierwszy. Sprawdź pisownię i kliknij „Przenieś” jeszcze raz, żeby potwierdzić.');
+        }
         await wczytaj();
         await utworzZdarzenie('PRZENIES', { modelId: m, sn: sn || undefined, ilosc, z: lok, do: doL, projekt: p || '' });
         return 'ok';
@@ -1199,6 +1201,59 @@
     }
   }
 
+  // ------------------------------------------------------------ nawigacja
+
+  function czySzkicZmieniony(s) {
+    if (!s) return false;
+    const pusty = nowySzkic(s.rodzaj);
+    for (const k of ['projekt', 'klientNazwa', 'adres', 'osoba', 'dostawca', 'nrFaktury', 'uwagi', 'powod']) if (C.norm(s[k]) !== C.norm(pusty[k])) return true;
+    if (!!s.podProjekt !== !!pusty.podProjekt) return true;
+    return s.pozycje.some((p) => p.modelId || p.sn || C.norm(p.modelLabel) || C.norm(p.snTekst) || C.norm(p.ilosc) || (s.rodzaj !== 'WZ' && s.rodzaj !== 'ZW' && C.norm(p.lok)));
+  }
+
+  /** Zwraca true, jeśli można opuścić bieżący formularz (pyta tylko, gdy coś wpisano). */
+  async function moznaOpuscic() {
+    if (!app.szkic || app.widok !== 'dokument') return true;
+    if (czySzkicZmieniony(app.szkic)) {
+      const ok = await potwierdz('Porzucić dokument?', 'Masz niezapisany dokument. Jeśli wyjdziesz, wpisane dane przepadną.', 'Porzuć dokument', 'czerwony');
+      if (!ok) return false;
+    }
+    app.szkic = null;
+    return true;
+  }
+
+  function historia(widok, zastap) {
+    try {
+      const stan = { widok };
+      if (zastap) history.replaceState(stan, '', '#' + widok);
+      else if (!history.state || history.state.widok !== widok) history.pushState(stan, '', '#' + widok);
+    } catch (e) { /* podgląd bez historii – trudno */ }
+  }
+
+  function pokazWidok(widok, opcje = {}) {
+    app.widok = widok;
+    if (!opcje.bezHistorii) historia(widok, opcje.zastap);
+    render();
+    if ($('.zawartosc')) $('.zawartosc').scrollTop = 0;
+  }
+
+  window.addEventListener('popstate', async (e) => {
+    if (!app.store || !app.user) return;
+    if (otwartyDialog) otwartyDialog.zamknij(null);
+    const cel = (e.state && e.state.widok) || (location.hash || '#pulpit').slice(1);
+    if (cel === app.widok) return;
+    if (cel === 'dokument' && !app.szkic) {
+      // wpis po porzuconym lub zapisanym formularzu – przeskakujemy go
+      try { history.back(); } catch (err) { pokazWidok('pulpit', { zastap: true }); }
+      return;
+    }
+    if (!(await moznaOpuscic())) {
+      historia(app.widok); // zostajemy w formularzu
+      return;
+    }
+    pokazWidok(WIDOKI[cel] ? cel : 'pulpit', { bezHistorii: true });
+  });
+
   // ------------------------------------------------------------ obsługa zdarzeń
 
   async function otworzFolder(uchwyt, zapytaj) {
@@ -1247,12 +1302,11 @@
     async wybierzOsobe(el) {
       app.user = app.st.uzytkownicy.get(el.dataset.id);
       try { localStorage.setItem('magazyn-ostatni-uzytkownik', app.user.userId); } catch (e) { /* */ }
-      app.widok = 'pulpit';
-      render();
+      pokazWidok('pulpit', { zastap: true });
       try { await kopiaTygodniowa(false); } catch (e) { toast('Nie udało się zapisać kopii tygodniowej: ' + e.message, 'blad'); }
     },
-    zmienOsobe() {
-      if (app.szkic && !confirm('Porzucić niezapisany dokument?')) return;
+    async zmienOsobe() {
+      if (!(await moznaOpuscic())) return;
       app.szkic = null;
       app.user = null;
       render();
@@ -1260,32 +1314,32 @@
     nowyUzytkownik() { edytujUzytkownika(null); },
     edytujUzytkownika(el) { edytujUzytkownika(el.dataset.id); },
     zmienPin() { zmienPin(); },
-    idz(el) {
-      if (app.szkic && app.widok === 'dokument' && !confirm('Porzucić niezapisany dokument?')) return;
-      if (app.widok === 'dokument') app.szkic = null;
-      app.widok = el.dataset.w;
-      render();
-      if ($('.zawartosc')) $('.zawartosc').scrollTop = 0;
+    async idz(el) {
+      if (!(await moznaOpuscic())) return;
+      pokazWidok(el.dataset.w);
+    },
+    async wstecz() {
+      if (!(await moznaOpuscic())) return;
+      const poprzedni = app.poprzedniWidok && app.poprzedniWidok !== 'dokument' ? app.poprzedniWidok : 'pulpit';
+      pokazWidok(poprzedni);
     },
     async odswiez() {
       await wczytaj();
       render();
       toast('Wczytano aktualne dane', 'ok');
     },
-    nowyDok(el) {
-      if (app.szkic && app.widok === 'dokument' && !confirm('Porzucić bieżący dokument?')) return;
+    async nowyDok(el) {
+      if (app.widok !== 'dokument') app.poprzedniWidok = app.widok;
+      if (!(await moznaOpuscic())) return;
       app.szkic = nowySzkic(el.dataset.r);
       if (el.dataset.r === 'PZ' || el.dataset.r === 'BO') app.szkic.pozycje.push({ modelLabel: '', modelId: '', lok: '', snTekst: '', ilosc: '', jedn: 'baza', stanTech: 'nowy', projekt: '' });
       app.filtr.wybor = '';
-      app.widok = 'dokument';
-      render();
-      if ($('.zawartosc')) $('.zawartosc').scrollTop = 0;
+      if (app.widok === 'dokument') render();
+      else pokazWidok('dokument');
     },
-    anulujSzkic() {
-      if (!confirm('Porzucić ten dokument?')) return;
-      app.szkic = null;
-      app.widok = 'pulpit';
-      render();
+    async anulujSzkic() {
+      if (!(await moznaOpuscic())) return;
+      AKCJE.wstecz();
     },
     zapiszSzkic() { zapiszSzkic(); },
     dodajPoz() {
@@ -1413,7 +1467,7 @@
   document.addEventListener('change', (e) => zmianaPola(e, true));
 
   window.addEventListener('beforeunload', (e) => {
-    if (app.szkic && app.widok === 'dokument') {
+    if (app.szkic && app.widok === 'dokument' && czySzkicZmieniony(app.szkic)) {
       e.preventDefault();
       e.returnValue = '';
     }
