@@ -1084,10 +1084,11 @@
         '<h3 class="sekcja">Ewidencja</h3><div class="siatka">' +
         '<div class="pole szerokie"><span>Sposób ewidencji ' + pomoc('seryjny') + '</span><label class="przelacznik"><input type="checkbox" name="seryjny" ' + (m.seryjny ? 'checked' : '') + (uzyty ? ' disabled' : '') + '><span>śledź każdą sztukę po numerze seryjnym</span></label>' + (uzyty ? '<small class="szary">Model występuje już w dokumentach, więc sposobu ewidencji nie można zmienić.</small>' : '') + '</div>' +
         pole('Jednostka', '<select name="jednostka"><option value="szt" ' + (m.jednostka !== 'm' ? 'selected' : '') + '>szt. (sztuki)</option><option value="m" ' + (m.jednostka === 'm' ? 'selected' : '') + '>m (metry)</option></select>', '', 'jednostka') +
-        pole('Jednostka zakupu', '<input name="jednostkaZakupu" value="' + esc(m.jednostkaZakupu || '') + '" placeholder="np. szpula, karton (opcjonalnie)">', '', 'jednostkaZakupu') +
-        pole('Ile w jednostce zakupu', '<input name="przelicznik" value="' + esc(m.przelicznik || '') + '" inputmode="decimal" placeholder="np. 305">') +
         pole('Stan minimalny', '<input name="stanMin" value="' + esc(m.stanMin || '') + '" inputmode="decimal" placeholder="brak">', '', 'stanMin') +
         pole('Status', '<select name="status">' + [['aktywny', 'aktywny'], ['EOL', 'EOL – wycofany przez producenta'], ['wycofany', 'wycofany z naszej oferty']].map(([v, n]) => '<option value="' + v + '" ' + ((m.status || 'aktywny') === v ? 'selected' : '') + '>' + n + '</option>').join('') + '</select>', '', 'status') +
+        '<div class="pole szerokie" data-blok-opak' + (m.seryjny ? ' hidden' : '') + '><span>Opakowanie zakupu ' + pomoc('jednostkaZakupu') + '</span><label class="przelacznik"><input type="checkbox" name="opak" ' + (m.jednostkaZakupu ? 'checked' : '') + '><span>kupujecie w opakowaniach (szpula, karton, paczka)</span></label></div>' +
+        '<div class="pole" data-pola-opak' + (m.seryjny || !m.jednostkaZakupu ? ' hidden' : '') + '><span>Nazwa opakowania</span><input name="jednostkaZakupu" value="' + esc(m.jednostkaZakupu || '') + '" placeholder="np. szpula, karton"></div>' +
+        '<div class="pole" data-pola-opak' + (m.seryjny || !m.jednostkaZakupu ? ' hidden' : '') + '><span data-ile-w-opak>Ile ' + esc(jmw(m.jednostka)) + ' w opakowaniu</span><input name="przelicznik" value="' + esc(m.przelicznik || '') + '" inputmode="decimal" placeholder="np. 305"></div>' +
         '</div>' +
         '<h3 class="sekcja">Karta katalogowa ' + pomoc('karta') + '</h3>' +
         '<div class="karta-katalogowa">' +
@@ -1113,13 +1114,22 @@
           };
           kat.addEventListener('change', ustaw);
         }
-        const jednostkaSzt = () => {
+        const opak = f.opak;
+        const odswiezOpakowanie = () => {
           if (ser.checked) jd.value = 'szt';
-          jd.disabled = ser.checked;
+          jd.disabled = ser.checked || !!uzyty;
+          $('[data-blok-opak]', f).hidden = ser.checked;
+          $$('[data-pola-opak]', f).forEach((el) => { el.hidden = ser.checked || !opak.checked; });
+          $('[data-ile-w-opak]', f).textContent = 'Ile ' + jmw(jd.value) + ' w opakowaniu';
         };
-        jednostkaSzt();
-        ser.addEventListener('change', jednostkaSzt);
-        kat.addEventListener('change', jednostkaSzt);
+        odswiezOpakowanie();
+        ser.addEventListener('change', odswiezOpakowanie);
+        kat.addEventListener('change', odswiezOpakowanie);
+        jd.addEventListener('change', odswiezOpakowanie);
+        opak.addEventListener('change', () => {
+          odswiezOpakowanie();
+          if (opak.checked) f.jednostkaZakupu.focus();
+        });
         const wejsciePliku = $('[data-plik-karty]', f);
         wejsciePliku.addEventListener('change', () => {
           nowyPlik = wejsciePliku.files[0] || null;
@@ -1151,12 +1161,16 @@
         const seryjny = uzyty ? !!m.seryjny : f.seryjny.checked;
         const dane = {
           modelId: id || 'm-' + C.noweId(8), kategoria: f.kategoria.value, producent: f.producent.value.trim(), model: f.model.value.trim(), pn: f.pn.value.trim(), ean: f.ean.value.trim(),
-          seryjny, jednostka: seryjny ? 'szt' : f.jednostka.value,
-          jednostkaZakupu: f.jednostkaZakupu.value.trim(), przelicznik: Number(f.przelicznik.value.replace(',', '.')) || '', stanMin: Number(f.stanMin.value.replace(',', '.')) || '', status: f.status.value, link,
+          seryjny, jednostka: seryjny ? 'szt' : uzyty ? m.jednostka || 'szt' : f.jednostka.value,
+          jednostkaZakupu: !seryjny && f.opak.checked ? f.jednostkaZakupu.value.trim() : '', przelicznik: !seryjny && f.opak.checked ? Number(f.przelicznik.value.replace(',', '.')) || '' : '', stanMin: Number(f.stanMin.value.replace(',', '.')) || '', status: f.status.value, link,
           kartaPlik: usunPlik ? '' : m.kartaPlik || '',
         };
         if (!dane.model) throw new Error('Podaj nazwę modelu');
-        if (dane.jednostkaZakupu && !(dane.przelicznik > 0)) throw new Error('Podaj, ile jednostek jest w jednostce zakupu (np. 305 m w szpuli)');
+        if (!seryjny && f.opak.checked) {
+          if (!dane.jednostkaZakupu) throw new Error('Podaj nazwę opakowania (np. szpula) albo odznacz „kupujecie w opakowaniach”');
+          if (!(dane.przelicznik > 0)) throw new Error('Podaj, ile ' + jmw(dane.jednostka) + ' jest w opakowaniu (np. 305 m w szpuli)');
+          if (C.normKlucz(dane.jednostkaZakupu).replace(/\.$/, '') === C.normKlucz(jmw(dane.jednostka)).replace(/\.$/, '')) throw new Error('Opakowanie musi być czymś innym niż jednostka (np. szpula, karton)');
+        }
         const dubel = Array.from(app.st.modele.values()).find((x) => x.modelId !== dane.modelId && C.normKlucz(x.producent + ' ' + x.model) === C.normKlucz(dane.producent + ' ' + dane.model));
         if (dubel) throw new Error('Taki model już jest w kartotece');
         if (nowyPlik) {

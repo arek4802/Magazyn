@@ -42,7 +42,7 @@
     nrFaktury: 'Numer faktury albo dokumentu WZ dostawcy – ułatwia późniejsze odszukanie dostawy.',
     seryjny: 'Zaznacz dla urządzeń z gwarancją, które trafiają do klienta – każda sztuka będzie śledzona osobno. Materiałów (kable, korytka, złącza) nie śledzi się po numerze.',
     jednostka: 'Sztuki albo metry. Kable i korytka liczymy w metrach.',
-    jednostkaZakupu: 'Jeśli kupujecie np. kabel w szpulach po 305 m, wpisz „szpula” i 305. Przy przyjęciu wpiszesz „2 szpule”, a aplikacja zapisze 610 m.',
+    jednostkaZakupu: 'Tylko dla materiałów. Jeśli kupujecie np. kabel w szpulach po 305 m albo złącza w kartonach po 50 szt., zaznacz to i wpisz nazwę opakowania oraz ile w nim jest. Przy przyjęciu wpiszesz „2 szpule”, a aplikacja zapisze 610 m. Stan nadal liczy się w jednostce (m, szt.).',
     stanMin: 'Gdy stan w magazynie spadnie poniżej tej wartości, model pojawi się w raporcie „Poniżej minimum” i na pulpicie.',
     status: '„EOL” oznacza model wycofany przez producenta – pojawi się w raporcie „EOL na stanie”. „Wycofany” chowa model z podpowiedzi w nowych dokumentach.',
     karta: 'Link do karty katalogowej na stronie producenta albo plik PDF zapisany w folderze magazynu. Przycisk „Szukaj” otwiera wyszukiwarkę z nazwą modelu.',
@@ -104,7 +104,7 @@
       <ul>
         <li>Model dodajesz raz: kategoria, producent, model, kod producenta (P/N), opcjonalnie EAN.</li>
         <li><b>Śledź po numerze seryjnym</b> zaznacz dla urządzeń z gwarancją, które trafiają do klienta. Materiały liczone są na sztuki albo metry.</li>
-        <li><b>Jednostka zakupu</b> pozwala przyjmować np. kabel w szpulach – wpisz „szpula” i 305, a aplikacja przeliczy na metry.</li>
+        <li><b>Opakowanie zakupu</b> (tylko materiały) pozwala przyjmować np. kabel w szpulach: zaznacz „kupujecie w opakowaniach”, wpisz „szpula” i 305, a przy przyjęciu aplikacja przeliczy szpule na metry. Przy urządzeniach z numerem seryjnym tego pola nie ma.</li>
         <li><b>Karta katalogowa:</b> wklej link ze strony producenta albo dołącz plik PDF. Przycisk „Szukaj w internecie” otworzy wyszukiwarkę z nazwą modelu. Kartę otworzysz potem jednym kliknięciem w kartotece, stanie magazynu i dokumentach (ikona <b>karty</b>).</li>
         <li>Status <b>EOL</b> oznacza model wycofany przez producenta – zobaczysz go w raporcie „EOL na stanie”.</li>
       </ul>` },

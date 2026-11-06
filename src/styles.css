@@ -70,7 +70,7 @@ p { margin: 0 0 10px; }
 .przycisk:disabled { opacity: .45; cursor: not-allowed; }
 .ikonowy { border: 0; background: transparent; padding: 6px; border-radius: 6px; cursor: pointer; color: var(--szary); display: inline-grid; place-items: center; }
 .ikonowy:hover { background: var(--marka-tlo); color: var(--marka); }
-.karta-btn { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; border: 1px solid var(--linia); background: #fff; color: var(--marka); border-radius: 6px; padding: 2px 5px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; vertical-align: middle; }
+.karta-btn { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; border: 1px solid var(--linia); background: #fff; color: var(--marka); border-radius: 6px; padding: 2px 5px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; vertical-align: middle; }
 .karta-btn .ik { width: 15px; height: 15px; vertical-align: 0; }
 .karta-btn:hover { background: var(--marka-tlo); border-color: var(--marka); }
 .karta-btn.z-tekstem { margin-left: 0; padding: 3px 8px; }

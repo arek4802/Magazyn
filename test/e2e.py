@@ -151,6 +151,7 @@ with sync_playwright() as pw:
       p.select_option('#modal select[name=kategoria]', 'Okablowanie')
       p.fill('#modal input[name=producent]', 'Belden')
       p.fill('#modal input[name=model]', 'Cat6A F/UTP')
+      p.check('#modal input[name=opak]')
       p.fill('#modal input[name=jednostkaZakupu]', 'szpula')
       p.fill('#modal input[name=przelicznik]', '500')
       okno_przycisk(p, 'Zapisz model')
