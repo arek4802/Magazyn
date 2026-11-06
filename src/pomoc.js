@@ -19,7 +19,7 @@
     dostawcy: 'Biblioteka dostawców z danymi z rejestrów (pełna nazwa, NIP, REGON, KRS, adres). Przy przyjęciu wybierasz dostawcę z listy, a jego dane trafiają na formularz.',
     dziennik: 'Każda operacja z autorem, datą i godziną. Niczego nie da się z niego usunąć.',
     problemy: 'Aplikacja przy każdym odczycie sprawdza, czy pliki w folderze nie zostały zmienione, usunięte albo zdublowane przez OneDrive.',
-    ustawienia: 'Użytkownicy, zmiana PIN-u, kopia zapasowa i informacje o folderze.',
+    ustawienia: 'Użytkownicy, zmiana PIN-u, blokada ekranu, kopia zapasowa i informacje o folderze.',
     pomoc: 'Pełna instrukcja obsługi.',
     // dokumenty
     BO: 'Bilans otwarcia: jednorazowy spis wszystkiego, co fizycznie leży w magazynie. Od tego dokumentu zaczyna się ewidencja.',
@@ -52,7 +52,7 @@
     stanMin: 'Gdy stan w magazynie spadnie poniżej tej wartości, model pojawi się w raporcie „Poniżej minimum” i na pulpicie.',
     status: '„EOL” oznacza model wycofany przez producenta – pojawi się w raporcie „EOL na stanie”. „Wycofany” chowa model z podpowiedzi w nowych dokumentach.',
     karta: 'Link do karty katalogowej na stronie producenta albo plik PDF zapisany w folderze magazynu. Przycisk „Szukaj” otwiera wyszukiwarkę z nazwą modelu.',
-    pin: 'PIN potwierdza, kto wystawił dokument. Każdy użytkownik ma własny PIN – nie podawaj go innym.',
+    pin: 'PIN to Twoje hasło: logujesz się nim, odblokowujesz ekran i potwierdzasz dokumenty. Nie podawaj go nikomu. Po 5 błędnych próbach logowanie wstrzymuje się na minutę.',
     przenies: 'Zmienia miejsce sprzętu w magazynie (np. z regału na antresolę). Nie tworzy formularza do podpisu, ale zostaje zapisane w dzienniku.',
     eksport: 'Zapisuje to, co widzisz na ekranie (z filtrami i w tej samej kolejności sortowania), jako plik Excel. Kopia trafia też do folderu „eksporty”.',
     odswiez: 'Wczytuje zmiany zapisane przez inne osoby. OneDrive potrzebuje od kilku sekund do kilku minut, żeby je przesłać.',
@@ -67,7 +67,8 @@
         <li><b>Folder.</b> Na firmowym OneDrive jest folder <b>Magazyn AV</b>, udostępniony do edycji wszystkim użytkownikom. Każdy synchronizuje go na swój komputer. Najlepiej kliknąć folder prawym przyciskiem i wybrać „Zawsze zachowuj na tym urządzeniu”.</li>
         <li><b>Aplikacja.</b> Plik <b>Magazyn.html</b> leży w tym folderze. Otwórz go w <b>Microsoft Edge</b> albo <b>Google Chrome</b> (inne przeglądarki nie potrafią zapisywać plików w folderze).</li>
         <li><b>Połączenie z folderem.</b> Za pierwszym razem kliknij „Wybierz folder Magazyn AV”, wskaż folder i zgódź się na zapis. Przy kolejnych uruchomieniach wystarczy „Połącz ponownie”.</li>
-        <li><b>Użytkownik.</b> Wybierz siebie z listy. Nowa osoba dodaje się przyciskiem „Dodaj użytkownika” i ustala własny PIN (4–8 cyfr).</li>
+        <li><b>Logowanie.</b> Wybierz siebie z listy i wpisz swój PIN. Nową osobę dodaje ktoś z zespołu w <b>Ustawieniach</b> i przekazuje jej PIN startowy – przy pierwszym logowaniu ustawia ona własny PIN, którego nikt inny nie zna.</li>
+        <li><b>Blokada ekranu.</b> Odchodzisz od komputera? Kliknij <b>Zablokuj</b> u góry. Ekran blokuje się też sam po kilkunastu minutach bezczynności (czas ustawisz w Ustawieniach). Odblokowujesz swoim PIN-em, a niezapisany dokument czeka.</li>
         <li><b>Bilans otwarcia.</b> Przy pierwszym uruchomieniu zróbcie inwentaryzację: wszystko, co leży w magazynie, wpisujecie dokumentem <b>BO</b>, miejsce po miejscu.</li>
       </ol>` },
     { id: 'przyjecie', tytul: 'Przyjęcie towaru (PZ)', html: `
@@ -144,7 +145,9 @@
       <p>Raz w tygodniu aplikacja sama zapisuje kopię całej bazy w folderze „kopie”. Dodatkowo OneDrive przechowuje historię wersji i kosz. W <b>Ustawieniach</b> możesz zrobić kopię ręcznie albo pobrać całą bazę jako jeden plik.</p>` },
     { id: 'faq', tytul: 'Najczęstsze pytania', html: `
       <dl class="faq">
-        <dt>Zapomniałem PIN-u.</dt><dd>Ktoś inny może dodać Cię jako nowego użytkownika w Ustawieniach, a stare konto oznaczyć jako nieaktywne. Historia Twoich dokumentów zostaje.</dd>
+        <dt>Zapomniałem PIN-u.</dt><dd>Poproś kogoś z zespołu: w Ustawieniach klika Twoje nazwisko, wybiera <b>Resetuj PIN</b>, potwierdza swoim PIN-em i przekazuje Ci PIN tymczasowy. Przy logowaniu ustawisz nowy. Reset zostaje w dzienniku, a Ty zobaczysz, kto go zrobił.</dd>
+        <dt>Czy ktoś może wejść na mój profil?</dt><dd>Bez Twojego PIN-u nie. Swój profil i PIN zmieniasz tylko Ty. Jedyna furtka to reset PIN-u przez kogoś z zespołu – ale wtedy przy Twoim następnym logowaniu zobaczysz, kto i kiedy to zrobił, a wpis zostaje w dzienniku. PIN chroni przed korzystaniem z cudzego konta przy komputerze; osoba z dostępem do plików na OneDrive i wiedzą techniczną mogłaby zmieniać pliki, ale wtedy wychwyci to Kontrola spójności.</dd>
+        <dt>Ktoś odszedł z firmy.</dt><dd>W Ustawieniach kliknij jego nazwisko i wybierz <b>Wyłącz konto</b>. Nie będzie mógł się zalogować, a jego dokumenty zostaną.</dd>
         <dt>Nowy komputer.</dt><dd>Zsynchronizuj folder Magazyn AV, otwórz Magazyn.html w Edge albo Chrome i wybierz folder. Dane są w folderze, nie w komputerze.</dd>
         <dt>Nie widzę dokumentu kolegi.</dt><dd>Poczekaj chwilę, aż OneDrive go prześle, i kliknij Odśwież.</dd>
         <dt>Czy mogę używać na telefonie?</dt><dd>Zapisywać można tylko na komputerze. Na telefonie zobaczysz wyeksportowane Excele i PDF-y w aplikacji OneDrive.</dd>

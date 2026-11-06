@@ -154,6 +154,8 @@
     proj: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
     dost: '<path d="M2 6h12v10H2z"/><path d="M14 9h4l3 3.5V16h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
     dol: '<path d="M6 9l6 6 6-6"/>',
+    klodka: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    wyloguj: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
     pobierz: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   };
   const ikona = (n, kl) => '<svg class="ik ' + (kl || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IK[n] || '') + '</svg>';
@@ -172,6 +174,12 @@
     app.st = C.zbudujStan(app.zdarzenia);
     for (const p of app.dziwne) app.st.problemy.push({ kod: 'PLIK', opis: 'Nietypowa nazwa pliku – możliwa kopia konfliktowa OneDrive: ' + p });
     if (app.user && app.st.uzytkownicy.has(app.user.userId)) app.user = app.st.uzytkownicy.get(app.user.userId);
+    if (app.user && app.user.aktywny === false) {
+      app.user = null;
+      app.szkic = null;
+      app.zablokowany = false;
+      setTimeout(() => toast('Twoje konto zostało dezaktywowane – wylogowano', 'blad'), 0);
+    }
   }
 
   async function zapiszZdarzenie(ev) {
@@ -246,15 +254,26 @@
         ok(w);
       };
       otwartyDialog = { zamknij };
+      let zajety = false;
       const obsluz = async (wartosc) => {
         if (wartosc === '__anuluj' || wartosc === 'anuluj') return zamknij(null);
+        if (zajety) return; // np. sprawdzanie PIN-u jeszcze trwa – drugi klik nic nie robi
         if (przyWyslaniu) {
+          zajety = true;
+          const przyciski = $$('.okno-stopka button', form).filter((x) => x.dataset.dialog !== 'anuluj');
+          przyciski.forEach((x) => { x.disabled = true; });
+          form.setAttribute('aria-busy', 'true');
+          $('.bledy-okna', form).innerHTML = '';
           try {
             const w = await przyWyslaniu(form, wartosc);
             if (w === false) return;
             zamknij(w === undefined ? wartosc : w);
           } catch (e) {
             $('.bledy-okna', form).innerHTML = '<div class="alert blad">' + (e.lista ? e.lista.map(esc).join('<br>') : esc(e.message)) + '</div>';
+          } finally {
+            zajety = false;
+            form.removeAttribute('aria-busy');
+            przyciski.forEach((x) => { x.disabled = false; });
           }
         } else zamknij(wartosc);
       };
@@ -289,7 +308,7 @@
       przyWyslaniu: async (f) => {
         const pin = f.pin.value.trim();
         if (!pin) throw new Error('Wpisz PIN');
-        if ((await C.hashPin(u.pinSalt, pin)) !== u.pinHash) {
+        if (!(await C.sprawdzPin(u, pin))) {
           f.pin.value = '';
           throw new Error('Nieprawidłowy PIN');
         }
@@ -432,18 +451,38 @@
       '</div><p class="stopka-start">MAASCK · ' + FIRMA.www + ' · wersja ' + esc(WERSJA) + '</p></div>';
   }
 
+  const inicjaly = (u) => esc((u.imie[0] || '') + (u.nazwisko[0] || ''));
+
   function ekranUzytkownika() {
-    const aktywni = Array.from(app.st.uzytkownicy.values()).filter((u) => u.aktywny !== false).sort((a, b) => (a.nazwisko + a.imie).localeCompare(b.nazwisko + b.imie, 'pl'));
+    const ostatni = app.ostatniUzytkownik;
+    const aktywni = Array.from(app.st.uzytkownicy.values()).filter((u) => u.aktywny !== false)
+      .sort((a, b) => (b.userId === ostatni) - (a.userId === ostatni) || (a.nazwisko + a.imie).localeCompare(b.nazwisko + b.imie, 'pl'));
+    const wszyscy = app.st.uzytkownicy.size;
     return '<div class="start"><div class="karta-startowa">' +
       '<img src="' + (LOGO.jasne || '') + '" alt="maasck" class="logo-start">' +
-      '<h1>Kto korzysta z magazynu?</h1>' +
-      '<p class="szary">Folder: <b>' + esc(app.store.nazwa) + '</b>' + (app.demo ? ' · tryb demonstracyjny' : '') + '</p>' +
+      '<h1>Zaloguj się</h1>' +
+      '<p class="szary">Folder: <b>' + esc(app.store.nazwa) + '</b>' + (app.demo ? ' · tryb demonstracyjny (PIN 1234)' : '') + '</p>' +
       (aktywni.length
-        ? '<div class="lista-osob">' + aktywni.map((u) => '<button class="osoba" data-a="wybierzOsobe" data-id="' + esc(u.userId) + '"><span class="awatar">' + esc((u.imie[0] || '') + (u.nazwisko[0] || '')) + '</span><span>' + esc(u.imie + ' ' + u.nazwisko) + '</span></button>').join('') + '</div>'
+        ? '<p class="maly szary">Wybierz siebie i wpisz swój PIN.</p><div class="lista-osob">' + aktywni.map((u) => '<button class="osoba" data-a="wybierzOsobe" data-id="' + esc(u.userId) + '"><span class="awatar">' + inicjaly(u) + '</span><span>' + esc(u.imie + ' ' + u.nazwisko) + '</span>' + (u.userId === ostatni ? '<span class="znaczek">ostatnio</span>' : '') + ikona('klodka') + '</button>').join('') + '</div>'
         : '<div class="alert info">To nowy, pusty folder. Dodaj pierwszego użytkownika – wpiszesz imię, nazwisko i własny PIN.</div>') +
-      '<button class="przycisk" data-a="nowyUzytkownik">' + ikona('plus') + 'Dodaj użytkownika</button>' +
-      ' <button class="przycisk tekstowy" data-a="zmienFolder">Inny folder</button>' +
+      (wszyscy
+        ? '<p class="maly szary">Nie ma Cię na liście? Poproś kogoś z zespołu, żeby dodał Cię w <b>Ustawieniach</b>. Przy pierwszym logowaniu ustawisz własny PIN.</p>'
+        : '<button class="przycisk glowny" data-a="nowyUzytkownik">' + ikona('plus') + 'Dodaj pierwszego użytkownika</button>') +
+      '<button class="przycisk tekstowy" data-a="zmienFolder">Inny folder</button>' +
       '</div></div>';
+  }
+
+  function ekranBlokady() {
+    const u = app.user;
+    const blok = sekundyBlokady(u.userId);
+    return '<div class="start"><form class="karta-startowa blokada" data-formularz="odblokuj" autocomplete="off">' +
+      '<img src="' + (LOGO.jasne || '') + '" alt="maasck" class="logo-start">' +
+      '<div class="kto-blokada"><span class="awatar duzy">' + inicjaly(u) + '</span><div><h1>' + esc(u.imie + ' ' + u.nazwisko) + '</h1><p class="szary">' + ikona('klodka') + ' Ekran zablokowany. Wpisz PIN, żeby wrócić – niezapisana praca czeka.</p></div></div>' +
+      '<label class="pole"><span>PIN</span><input name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" class="pin" autofocus' + (blok ? ' disabled' : '') + '></label>' +
+      '<div class="alert blad"' + (blok ? '' : ' hidden') + ' data-blad-blokady>' + (blok ? 'Za dużo błędnych prób. Spróbuj za ' + blok + ' s.' : '') + '</div>' +
+      '<button class="przycisk glowny" type="submit">' + ikona('klodka') + 'Odblokuj</button>' +
+      '<button class="przycisk tekstowy" type="button" data-a="wyloguj">To nie ja – zmień osobę</button>' +
+      '</form></div>';
   }
 
   // ------------------------------------------------------------ układ
@@ -498,7 +537,8 @@
           '<span class="odstep"></span>' +
           '<button class="przycisk tekstowy" data-a="odswiez" data-tip="' + esc(P.TIPY.odswiez) + '">' + ikona('odsw') + 'Odśwież</button>' +
           '<button class="przycisk tekstowy" data-a="idz" data-w="pomoc" data-tip="Instrukcja obsługi (F1)">' + ikona('pomoc') + 'Pomoc</button>' +
-          '<button class="uzytkownik" data-a="zmienOsobe" data-tip="Zalogowany użytkownik. Kliknij, żeby zmienić osobę."><span class="awatar">' + esc((u.imie[0] || '') + (u.nazwisko[0] || '')) + '</span>' + esc(u.imie + ' ' + u.nazwisko) + '</button>' +
+          '<button class="przycisk tekstowy" data-a="zablokuj" data-tip="Zablokuj ekran, gdy odchodzisz od komputera. Wrócisz PIN-em, a niezapisana praca zostanie.">' + ikona('klodka') + 'Zablokuj</button>' +
+          '<button class="uzytkownik" data-a="konto" data-tip="Twoje konto: profil, zmiana PIN-u, wylogowanie."><span class="awatar">' + inicjaly(u) + '</span>' + esc(u.imie + ' ' + u.nazwisko) + '</button>' +
         '</header>' +
         '<div class="zawartosc">' + tresc + '</div>' +
       '</main></div>';
@@ -798,13 +838,18 @@
   WIDOKI.ustawienia = () => {
     const uzytkownicy = Array.from(app.st.uzytkownicy.values()).sort((a, b) => (a.nazwisko + a.imie).localeCompare(b.nazwisko + b.imie, 'pl'));
     return naglowekWidoku('Ustawienia', 'Użytkownicy, PIN, kopie zapasowe i folder z danymi.', '', 'ustawienia') +
-      '<div class="dwie-kolumny"><section class="karta"><h2>Użytkownicy</h2><p class="szary">Ról nie ma – każdy może to samo. PIN potwierdza, kto wystawił dokument.</p>' +
+      '<div class="dwie-kolumny"><section class="karta"><h2>Użytkownicy</h2><p class="szary">Ról nie ma – w magazynie każdy może to samo. Każdy loguje się swoim PIN-em i tylko on zmienia swój profil. Kliknij osobę, żeby zresetować jej PIN albo wyłączyć konto.</p>' +
       tabela('uzytkownicy', 'Użytkownicy', ['Imię i nazwisko', 'E-mail', 'Telefon', 'Status'], uzytkownicy.map((u) => ({
         akcja: 'edytujUzytkownika" data-id="' + esc(u.userId),
-        komorki: ['<b>' + esc(u.imie + ' ' + u.nazwisko) + '</b>', esc(u.email || ''), esc(u.tel || ''), u.aktywny === false ? '<span class="znaczek anul">nieaktywny</span>' : '<span class="znaczek ok">aktywny</span>'],
-        dane: [u.imie + ' ' + u.nazwisko, u.email || '', u.tel || '', u.aktywny === false ? 'nieaktywny' : 'aktywny'],
+        komorki: ['<b>' + esc(u.imie + ' ' + u.nazwisko) + '</b>' + (u.userId === app.user.userId ? ' <span class="znaczek projekt">to Ty</span>' : ''), esc(u.email || ''), esc(u.tel || ''), (u.aktywny === false ? '<span class="znaczek anul">wyłączone</span>' : '<span class="znaczek ok">aktywne</span>') + (u.pinDoZmiany && u.aktywny !== false ? ' <span class="znaczek">PIN tymczasowy</span>' : '')],
+        dane: [u.imie + ' ' + u.nazwisko, u.email || '', u.tel || '', (u.aktywny === false ? 'wyłączone' : 'aktywne') + (u.pinDoZmiany ? ', PIN tymczasowy' : '')],
       }))) +
-      '<p><button class="przycisk" data-a="nowyUzytkownik">' + ikona('plus') + 'Dodaj użytkownika</button> <button class="przycisk" data-a="zmienPin">Zmień mój PIN</button></p></section>' +
+      '<div class="rzad-przyciskow"><button class="przycisk" data-a="nowyUzytkownik">' + ikona('plus') + 'Dodaj użytkownika</button><button class="przycisk" data-a="edytujUzytkownika" data-id="' + esc(app.user.userId) + '">Mój profil</button><button class="przycisk" data-a="zmienPin">Zmień mój PIN</button></div></section>' +
+      '<section class="karta"><h2>Logowanie i blokada ekranu</h2>' +
+        '<p class="szary">Ekran blokuje się sam, gdy nikt nie używa aplikacji. Odblokowujesz go swoim PIN-em, a niezapisany dokument czeka. Po ' + MAKS_PROB + ' błędnych PIN-ach logowanie na tę osobę wstrzymuje się na minutę.</p>' +
+        '<label class="pole wiersz"><span>Blokuj ekran po</span><select data-ustawienie="blokada">' + [5, 10, 15, 30, 60, 0].map((m) => '<option value="' + m + '"' + (m === minutyBlokady() ? ' selected' : '') + '>' + (m ? m + ' min bezczynności' : 'nigdy (niezalecane)') + '</option>').join('') + '</select></label>' +
+        '<p class="szary maly">To ustawienie dotyczy tylko tego komputera.</p>' +
+        '<p><button class="przycisk" data-a="zablokuj">' + ikona('klodka') + 'Zablokuj teraz</button></p></section>' +
       '<section class="karta"><h2>Dane</h2>' +
         '<p>Folder: <b>' + esc(app.store.nazwa) + '</b>' + (app.demo ? ' (tryb demonstracyjny)' : '') + '<br>Plików zdarzeń: ' + app.zdarzenia.length + '<br>Ostatni odczyt: ' + (app.ostatniOdczyt ? fmtCzas(app.ostatniOdczyt.toISOString()) : '') + '</p>' +
         '<p><button class="przycisk" data-a="kopiaTeraz" ' + (app.demo ? 'disabled' : '') + '>Zrób kopię zapasową teraz</button> <button class="przycisk" data-a="pobierzBaze">Pobierz całą bazę (JSON)</button></p>' +
@@ -1964,50 +2009,302 @@
     if (w === 'zwrot') return AKCJE.nowyDok({ dataset: { r: 'ZW', projekt: p.numer } });
   }
 
-  async function edytujUzytkownika(id) {
-    const nowy = !id;
-    const u = id ? app.st.uzytkownicy.get(id) : { imie: '', nazwisko: '', email: '', tel: '', aktywny: true };
+  // ------------------------------------------------------------ użytkownicy, logowanie i blokada ekranu
+  //
+  // Każdy loguje się swoim PIN-em. Swój profil i PIN zmienia tylko właściciel. Reset PIN-u i wyłączenie
+  // cudzego konta trzeba potwierdzić własnym PIN-em – zostają w dzienniku, a osoba po resecie musi
+  // przy logowaniu ustawić własny PIN i widzi, kto zrobił reset.
+
+  const MAKS_PROB = 5;
+  const PAUZA_S = 60;
+  const BLOKADA_MIN = 15;
+  const pamiecProb = {};
+  function proby() {
+    try { return JSON.parse(localStorage.getItem('magazyn-proby') || '{}') || {}; } catch (e) { return pamiecProb; }
+  }
+  function zapiszProby(x) {
+    try { localStorage.setItem('magazyn-proby', JSON.stringify(x)); } catch (e) { Object.assign(pamiecProb, x); }
+  }
+  /** Ile sekund zostało do końca pauzy po zbyt wielu błędnych PIN-ach (0 = można próbować). */
+  function sekundyBlokady(userId) {
+    const x = proby()[userId];
+    const s = x && x.do ? Math.ceil((x.do - Date.now()) / 1000) : 0;
+    return s > 0 ? s : 0;
+  }
+  function zlaProba(userId) {
+    const wszystkie = proby();
+    const x = wszystkie[userId] || { n: 0 };
+    x.n = (x.n || 0) + 1;
+    if (x.n >= MAKS_PROB) { x.do = Date.now() + PAUZA_S * 1000; x.n = 0; }
+    wszystkie[userId] = x;
+    zapiszProby(wszystkie);
+    return sekundyBlokady(userId);
+  }
+  function dobraProba(userId) {
+    const wszystkie = proby();
+    delete wszystkie[userId];
+    zapiszProby(wszystkie);
+  }
+  const komunikatPauzy = (s) => 'Za dużo błędnych prób. Logowanie wstrzymane na ' + s + ' s.';
+
+  function sprawdzNowyPin(pin, pin2) {
+    if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN musi mieć od 4 do 8 cyfr');
+    if (pin !== pin2) throw new Error('PIN-y się różnią');
+    if (C.slabyPin(pin)) throw new Error('Ten PIN jest zbyt prosty (same takie same albo kolejne cyfry). Wybierz inny.');
+  }
+  const polePin = (nazwa, etykieta, auto) => pole(etykieta, '<input name="' + nazwa + '" type="password" inputmode="numeric" maxlength="8" autocomplete="' + (auto || 'off') + '" class="pin">');
+
+  const minutyBlokady = () => {
+    try { const v = localStorage.getItem('magazyn-blokada-min'); return v === null ? BLOKADA_MIN : Number(v) || 0; } catch (e) { return BLOKADA_MIN; }
+  };
+  const opisMinut = (m) => m + ' ' + odm(m, 'minucie', 'minutach', 'minutach');
+
+  async function zaloguj(userId) {
+    const u = app.st.uzytkownicy.get(userId);
+    if (!u || u.aktywny === false) return;
     const w = await dialog({
-      tytul: nowy ? 'Nowy użytkownik' : 'Edycja użytkownika', szeroki: true,
-      tresc: '<div class="siatka">' + pole('Imię *', '<input name="imie" value="' + esc(u.imie) + '">') + pole('Nazwisko *', '<input name="nazwisko" value="' + esc(u.nazwisko) + '">') + pole('E-mail', '<input name="email" value="' + esc(u.email) + '">') + pole('Telefon', '<input name="tel" value="' + esc(u.tel) + '">') +
-        (nowy ? pole('PIN (4–8 cyfr) *', '<input name="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">') + pole('Powtórz PIN *', '<input name="pin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">') : '<div class="pole"><span>Status</span><label class="przelacznik"><input type="checkbox" name="aktywny" ' + (u.aktywny !== false ? 'checked' : '') + '> aktywny</label></div>') + '</div>',
-      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz', klasa: 'glowny', submit: true }],
+      tytul: 'Zaloguj się',
+      tresc: '<div class="kto-blokada"><span class="awatar duzy">' + inicjaly(u) + '</span><div><b>' + esc(u.imie + ' ' + u.nazwisko) + '</b><p class="szary maly">Wpisz swój PIN.' + (app.demo ? ' W trybie demonstracyjnym: 1234.' : '') + '</p></div></div>' +
+        '<label class="pole"><span>PIN ' + pomoc('pin') + '</span><input name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" class="pin"></label>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Wróć' }, { wartosc: 'ok', etykieta: 'Zaloguj', klasa: 'glowny', submit: true }],
+      przyWyslaniu: async (f) => {
+        const pauza = sekundyBlokady(userId);
+        if (pauza) throw new Error(komunikatPauzy(pauza));
+        const pin = f.pin.value.trim();
+        if (!pin) throw new Error('Wpisz PIN');
+        if (!(await C.sprawdzPin(u, pin))) {
+          f.pin.value = '';
+          const s = zlaProba(userId);
+          throw new Error(s ? komunikatPauzy(s) : 'Nieprawidłowy PIN');
+        }
+        dobraProba(userId);
+        return 'ok';
+      },
+    });
+    if (w === 'ok') await poZalogowaniu(u);
+  }
+
+  async function poZalogowaniu(u) {
+    app.user = u;
+    app.zablokowany = false;
+    app.aktywnosc = Date.now();
+    app.ostatniUzytkownik = u.userId;
+    try { localStorage.setItem('magazyn-ostatni-uzytkownik', u.userId); } catch (e) { /* */ }
+    pokazWidok('pulpit', { zastap: true });
+    if (u.pinDoZmiany && !(await ustawWlasnyPin(u))) return wyloguj(true);
+    try { await kopiaTygodniowa(false); } catch (e) { toast('Nie udało się zapisać kopii tygodniowej: ' + e.message, 'blad'); }
+  }
+
+  /** Po resecie albo przy pierwszym logowaniu: trzeba ustawić PIN, którego nikt inny nie zna. */
+  async function ustawWlasnyPin(u) {
+    const kto = u.pinResetPrzez ? osoba(u.pinResetPrzez) : '';
+    const w = await dialog({
+      tytul: 'Ustaw własny PIN',
+      tresc: (u.pinResetPrzez
+        ? '<div class="alert ostrz">Twój PIN zresetował(a) <b>' + esc(kto) + '</b>' + (u.pinResetKiedy ? ' (' + fmtCzas(u.pinResetKiedy) + ')' : '') + '. Jeśli nie prosiłeś o reset, zgłoś to od razu.</div>'
+        : '<p>To Twoje pierwsze logowanie. PIN startowy zna osoba, która zakładała konto – ustaw teraz własny.</p>') +
+        '<div class="siatka">' + polePin('pin', 'Nowy PIN (4–8 cyfr)', 'new-password') + polePin('pin2', 'Powtórz nowy PIN', 'new-password') + '</div>' +
+        '<p class="szary maly">Nie używaj prostych PIN-ów (1111, 1234). Sześć cyfr jest bezpieczniejsze niż cztery.</p>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Wyloguj' }, { wartosc: 'ok', etykieta: 'Ustaw PIN', klasa: 'glowny', submit: true }],
+      przyWyslaniu: async (f) => {
+        const pin = f.pin.value.trim();
+        sprawdzNowyPin(pin, f.pin2.value.trim());
+        if (await C.sprawdzPin(u, pin)) throw new Error('Nowy PIN musi być inny niż ten, który dostałeś');
+        await utworzZdarzenie('UZYTK', Object.assign({ userId: u.userId, pinDoZmiany: false, pinResetPrzez: '', pinResetKiedy: '' }, await C.noweDanePinu(pin)));
+        return 'ok';
+      },
+    });
+    if (w === 'ok') toast('Ustawiono nowy PIN', 'ok');
+    return w === 'ok';
+  }
+
+  async function wyloguj(bezPytania) {
+    if (!bezPytania && !(await moznaOpuscic())) return;
+    const porzucono = bezPytania && app.szkic && czySzkicZmieniony();
+    app.szkic = null;
+    app.user = null;
+    app.zablokowany = false;
+    zamknijListe();
+    render();
+    if (porzucono) toast('Niezapisany dokument poprzedniej osoby został porzucony', 'blad');
+  }
+
+  function zablokuj() {
+    if (!app.user || app.zablokowany) return;
+    if (otwartyDialog) otwartyDialog.zamknij(null);
+    zamknijListe();
+    ukryjDymek();
+    app.zablokowany = true;
+    render();
+  }
+
+  function sprawdzBezczynnosc() {
+    const min = minutyBlokady();
+    if (app.user && !app.zablokowany && min > 0 && Date.now() - app.aktywnosc > min * 60000) zablokuj();
+  }
+
+  app.aktywnosc = Date.now();
+  let ostatniRuch = 0;
+  const ruch = () => {
+    const t = Date.now();
+    if (t - ostatniRuch < 1000) return;
+    ostatniRuch = t;
+    if (!app.zablokowany) app.aktywnosc = t;
+  };
+  ['pointerdown', 'keydown', 'wheel', 'mousemove', 'touchstart'].forEach((n) => document.addEventListener(n, ruch, { capture: true, passive: true }));
+  setInterval(sprawdzBezczynnosc, 15000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sprawdzBezczynnosc(); });
+
+  // odblokowanie ekranu
+  document.addEventListener('submit', async (e) => {
+    const f = e.target.closest && e.target.closest('[data-formularz="odblokuj"]');
+    if (!f) return;
+    e.preventDefault();
+    const u = app.user;
+    const blad = $('[data-blad-blokady]', f);
+    const pokaz = (t) => { blad.textContent = t; blad.hidden = false; };
+    const pauza = sekundyBlokady(u.userId);
+    if (pauza) return pokaz(komunikatPauzy(pauza));
+    const pin = f.pin.value.trim();
+    if (!pin) return pokaz('Wpisz PIN');
+    if (!(await C.sprawdzPin(u, pin))) {
+      f.pin.value = '';
+      const s = zlaProba(u.userId);
+      if (s) {
+        f.pin.disabled = true;
+        setTimeout(() => { if (app.zablokowany) render(); }, s * 1000);
+      }
+      return pokaz(s ? komunikatPauzy(s) : 'Nieprawidłowy PIN');
+    }
+    dobraProba(u.userId);
+    app.zablokowany = false;
+    app.aktywnosc = Date.now();
+    render();
+  });
+
+  async function konto() {
+    const u = app.user;
+    const min = minutyBlokady();
+    const w = await dialog({
+      tytul: 'Twoje konto',
+      tresc: '<div class="kto-blokada"><span class="awatar duzy">' + inicjaly(u) + '</span><div><b>' + esc(u.imie + ' ' + u.nazwisko) + '</b><p class="szary maly">' + esc([u.email, u.tel].filter(Boolean).join(' · ') || 'bez e-maila i telefonu') + '</p></div></div>' +
+        '<p class="szary maly">' + (min ? 'Ekran zablokuje się sam po ' + opisMinut(min) + ' bezczynności.' : 'Automatyczna blokada ekranu jest wyłączona na tym komputerze.') + ' Zmienisz to w Ustawieniach.</p>',
+      przyciski: [{ wartosc: 'profil', etykieta: 'Mój profil' }, { wartosc: 'pin', etykieta: 'Zmień PIN' }, { wartosc: 'wyloguj', etykieta: ikona('wyloguj') + 'Wyloguj' }, { wartosc: 'zablokuj', etykieta: ikona('klodka') + 'Zablokuj ekran', klasa: 'glowny' }],
+    });
+    if (w === 'profil') return edytujUzytkownika(u.userId);
+    if (w === 'pin') return zmienPin();
+    if (w === 'wyloguj') return wyloguj();
+    if (w === 'zablokuj') return zablokuj();
+  }
+
+  /** Nowe konto albo edycja WŁASNEGO profilu. Cudze konto: pokazUzytkownika. */
+  async function edytujUzytkownika(id) {
+    if (id && app.user && id !== app.user.userId) return pokazUzytkownika(id);
+    const nowy = !id;
+    const pierwszy = nowy && !app.user;
+    const u = id ? app.st.uzytkownicy.get(id) : { imie: '', nazwisko: '', email: '', tel: '' };
+    const w = await dialog({
+      tytul: pierwszy ? 'Pierwszy użytkownik' : nowy ? 'Nowy użytkownik' : 'Mój profil', szeroki: true,
+      tresc: (nowy && !pierwszy ? '<p class="szary">Wpisz PIN startowy i przekaż go tej osobie. Przy pierwszym logowaniu ustawi własny PIN, którego nikt inny nie zna.</p>' : '') +
+        '<div class="siatka">' + pole('Imię *', '<input name="imie" value="' + esc(u.imie) + '">') + pole('Nazwisko *', '<input name="nazwisko" value="' + esc(u.nazwisko) + '">') + pole('E-mail', '<input name="email" value="' + esc(u.email) + '">') + pole('Telefon', '<input name="tel" value="' + esc(u.tel) + '">') +
+        (nowy ? polePin('pin', pierwszy ? 'Twój PIN (4–8 cyfr) *' : 'PIN startowy (4–8 cyfr) *', 'new-password') + polePin('pin2', 'Powtórz PIN *', 'new-password') : '') + '</div>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: nowy ? 'Dodaj użytkownika' : 'Zapisz', klasa: 'glowny', submit: true }],
       przyWyslaniu: async (f) => {
         const dane = { userId: id || C.noweId(8), imie: f.imie.value.trim(), nazwisko: f.nazwisko.value.trim(), email: f.email.value.trim(), tel: f.tel.value.trim() };
         if (!dane.imie || !dane.nazwisko) throw new Error('Podaj imię i nazwisko');
+        const dubel = Array.from(app.st.uzytkownicy.values()).find((x) => x.userId !== dane.userId && x.aktywny !== false && C.normKlucz(x.imie + ' ' + x.nazwisko) === C.normKlucz(dane.imie + ' ' + dane.nazwisko));
+        if (dubel) throw new Error('Jest już aktywne konto „' + dubel.imie + ' ' + dubel.nazwisko + '”');
         if (nowy) {
           const pin = f.pin.value.trim();
-          if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN musi mieć od 4 do 8 cyfr');
-          if (pin !== f.pin2.value.trim()) throw new Error('PIN-y się różnią');
-          dane.pinSalt = C.noweId(12);
-          dane.pinHash = await C.hashPin(dane.pinSalt, pin);
-          dane.aktywny = true;
-        } else dane.aktywny = f.aktywny.checked;
-        const autor = app.user ? app.user.userId : dane.userId;
-        const ev = C.noweZdarzenie(app.st, 'UZYTK', autor, dane);
+          sprawdzNowyPin(pin, f.pin2.value.trim());
+          Object.assign(dane, await C.noweDanePinu(pin), { aktywny: true, pinDoZmiany: !pierwszy });
+        }
+        const ev = C.noweZdarzenie(app.st, 'UZYTK', app.user ? app.user.userId : dane.userId, dane);
         await zapiszZdarzenie(ev);
         return dane.userId;
       },
     });
     if (!w) return;
-    toast('Zapisano użytkownika', 'ok');
-    if (!app.user) app.user = app.st.uzytkownicy.get(w);
+    if (pierwszy) {
+      toast('Witaj! Konto założone', 'ok');
+      return poZalogowaniu(app.st.uzytkownicy.get(w));
+    }
+    toast(nowy ? 'Dodano użytkownika – przekaż mu PIN startowy' : 'Zapisano profil', 'ok');
     render();
+  }
+
+  /** Cudze konto: podgląd, reset PIN-u, wyłączenie albo przywrócenie (z potwierdzeniem własnym PIN-em). */
+  async function pokazUzytkownika(id) {
+    const u = app.st.uzytkownicy.get(id);
+    if (!u) return;
+    const aktywny = u.aktywny !== false;
+    const dokumentow = Array.from(app.st.dokumenty.values()).filter((d) => d.ev.autor === id).length;
+    const w = await dialog({
+      tytul: esc(u.imie + ' ' + u.nazwisko),
+      tresc: '<dl class="opis"><dt>E-mail</dt><dd>' + esc(u.email || '–') + '</dd><dt>Telefon</dt><dd>' + esc(u.tel || '–') + '</dd>' +
+        '<dt>Konto</dt><dd>' + (aktywny ? '<span class="znaczek ok">aktywne</span>' : '<span class="znaczek anul">wyłączone</span>') + (u.pinDoZmiany ? ' <span class="znaczek">PIN tymczasowy</span>' : '') + '</dd>' +
+        '<dt>Założone</dt><dd>' + (u.utworzono ? fmtData(u.utworzono) : '–') + '</dd><dt>Wystawione dokumenty</dt><dd>' + dokumentow + '</dd></dl>' +
+        '<p class="szary maly">Profil i PIN zmienia tylko właściciel konta. Gdy ktoś zapomni PIN-u, możesz go zresetować; gdy ktoś odchodzi z firmy – wyłączyć konto. Obie operacje potwierdzasz swoim PIN-em i zostają w dzienniku. Dokumenty tej osoby zostają bez zmian.</p>',
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Zamknij' }].concat(aktywny
+        ? [{ wartosc: 'dezaktywuj', etykieta: 'Wyłącz konto', klasa: 'czerwony' }, { wartosc: 'reset', etykieta: 'Resetuj PIN', klasa: 'glowny' }]
+        : [{ wartosc: 'przywroc', etykieta: 'Przywróć konto', klasa: 'glowny' }]),
+    });
+    if (w === 'reset') return resetujPin(u);
+    if (w === 'dezaktywuj' || w === 'przywroc') {
+      if (w === 'dezaktywuj' && Array.from(app.st.uzytkownicy.values()).filter((x) => x.aktywny !== false).length <= 1) return toast('Nie można wyłączyć ostatniego aktywnego konta', 'blad');
+      const ok = await pytajPin(w === 'dezaktywuj' ? 'Wyłączenie konta: ' + u.imie + ' ' + u.nazwisko + '. Ta osoba nie będzie mogła się zalogować; jej dokumenty zostają.' : 'Przywrócenie konta: ' + u.imie + ' ' + u.nazwisko + '.');
+      if (!ok) return;
+      await utworzZdarzenie('UZYTK', { userId: u.userId, aktywny: w === 'przywroc' });
+      toast(w === 'dezaktywuj' ? 'Konto wyłączone' : 'Konto przywrócone', 'ok');
+      render();
+    }
+  }
+
+  async function resetujPin(u) {
+    const w = await dialog({
+      tytul: 'Reset PIN-u: ' + esc(u.imie + ' ' + u.nazwisko),
+      tresc: '<p>Wpisz PIN tymczasowy i przekaż go tej osobie osobiście. Przy logowaniu będzie musiała ustawić własny PIN i zobaczy, kto zrobił reset.</p>' +
+        '<div class="siatka">' + polePin('pin', 'PIN tymczasowy (4–8 cyfr)', 'new-password') + polePin('pin2', 'Powtórz PIN tymczasowy', 'new-password') + '</div>' +
+        polePin('moj', 'Twój PIN – potwierdzenie (' + esc(app.user.imie + ' ' + app.user.nazwisko) + ')'),
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Resetuj PIN', klasa: 'glowny', submit: true }],
+      przyWyslaniu: async (f) => {
+        const pauza = sekundyBlokady(app.user.userId);
+        if (pauza) throw new Error(komunikatPauzy(pauza));
+        if (!(await C.sprawdzPin(app.user, f.moj.value.trim()))) {
+          f.moj.value = '';
+          const s = zlaProba(app.user.userId);
+          throw new Error(s ? komunikatPauzy(s) : 'Twój PIN jest nieprawidłowy');
+        }
+        dobraProba(app.user.userId);
+        const pin = f.pin.value.trim();
+        if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN tymczasowy musi mieć od 4 do 8 cyfr');
+        if (pin !== f.pin2.value.trim()) throw new Error('PIN-y tymczasowe się różnią');
+        await utworzZdarzenie('UZYTK', Object.assign({ userId: u.userId, pinDoZmiany: true, pinResetPrzez: app.user.userId, pinResetKiedy: new Date().toISOString() }, await C.noweDanePinu(pin)));
+        return 'ok';
+      },
+    });
+    if (w) { toast('Zresetowano PIN – przekaż PIN tymczasowy osobiście', 'ok'); render(); }
   }
 
   async function zmienPin() {
     const u = app.st.uzytkownicy.get(app.user.userId);
     const w = await dialog({
       tytul: 'Zmiana PIN-u',
-      tresc: pole('Obecny PIN', '<input name="stary" type="password" inputmode="numeric" maxlength="8">') + pole('Nowy PIN (4–8 cyfr)', '<input name="pin" type="password" inputmode="numeric" maxlength="8">') + pole('Powtórz nowy PIN', '<input name="pin2" type="password" inputmode="numeric" maxlength="8">'),
+      tresc: polePin('stary', 'Obecny PIN') + '<div class="siatka">' + polePin('pin', 'Nowy PIN (4–8 cyfr)', 'new-password') + polePin('pin2', 'Powtórz nowy PIN', 'new-password') + '</div>' +
+        '<p class="szary maly">Nie używaj prostych PIN-ów (1111, 1234). Sześć cyfr jest bezpieczniejsze niż cztery.</p>',
       przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zmień PIN', klasa: 'glowny', submit: true }],
       przyWyslaniu: async (f) => {
-        if ((await C.hashPin(u.pinSalt, f.stary.value.trim())) !== u.pinHash) throw new Error('Obecny PIN jest nieprawidłowy');
+        const pauza = sekundyBlokady(u.userId);
+        if (pauza) throw new Error(komunikatPauzy(pauza));
+        if (!(await C.sprawdzPin(u, f.stary.value.trim()))) {
+          f.stary.value = '';
+          const s = zlaProba(u.userId);
+          throw new Error(s ? komunikatPauzy(s) : 'Obecny PIN jest nieprawidłowy');
+        }
+        dobraProba(u.userId);
         const pin = f.pin.value.trim();
-        if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN musi mieć od 4 do 8 cyfr');
-        if (pin !== f.pin2.value.trim()) throw new Error('PIN-y się różnią');
-        const salt = C.noweId(12);
-        await utworzZdarzenie('UZYTK', { userId: u.userId, pinSalt: salt, pinHash: await C.hashPin(salt, pin) });
+        sprawdzNowyPin(pin, f.pin2.value.trim());
+        await utworzZdarzenie('UZYTK', Object.assign({ userId: u.userId, pinDoZmiany: false, pinResetPrzez: '', pinResetKiedy: '' }, await C.noweDanePinu(pin)));
         return 'ok';
       },
     });
@@ -2078,6 +2375,7 @@
     let html;
     if (!app.store) html = ekranStartowy();
     else if (!app.user) html = ekranUzytkownika();
+    else if (app.zablokowany) html = ekranBlokady();
     else html = uklad((WIDOKI[app.widok] || WIDOKI.pulpit)());
     const przewiniecie = $('.zawartosc') ? $('.zawartosc').scrollTop : 0;
     const aktywny = document.activeElement;
@@ -2086,6 +2384,7 @@
     const lista = wyb.pole && !listaWyboru.hidden && !wyb.pole.closest('#modal') ? { filtr: wyb.pole.dataset.pisze === '1' } : null;
     if (dymekDla && !dymekDla.closest('#modal')) ukryjDymek(); // dymek przycisku, który za chwilę zniknie
     root.innerHTML = html;
+    if (app.zablokowany && app.user) { const pin = $('[data-formularz="odblokuj"] input[name=pin]'); if (pin && !pin.disabled) pin.focus(); return; }
     if ($('.zawartosc')) $('.zawartosc').scrollTop = przewiniecie;
     if (klucz) {
       const el = $('[data-filtr="' + klucz + '"], [data-f="' + klucz + '"], [data-p="' + klucz + '"]');
@@ -2200,18 +2499,11 @@
       app.szkic = null;
       render();
     },
-    async wybierzOsobe(el) {
-      app.user = app.st.uzytkownicy.get(el.dataset.id);
-      try { localStorage.setItem('magazyn-ostatni-uzytkownik', app.user.userId); } catch (e) { /* */ }
-      pokazWidok('pulpit', { zastap: true });
-      try { await kopiaTygodniowa(false); } catch (e) { toast('Nie udało się zapisać kopii tygodniowej: ' + e.message, 'blad'); }
-    },
-    async zmienOsobe() {
-      if (!(await moznaOpuscic())) return;
-      app.szkic = null;
-      app.user = null;
-      render();
-    },
+    wybierzOsobe(el) { return zaloguj(el.dataset.id); },
+    zmienOsobe() { return wyloguj(); },
+    wyloguj() { return wyloguj(app.zablokowany); },
+    zablokuj() { zablokuj(); },
+    konto() { return konto(); },
     nowyUzytkownik() { edytujUzytkownika(null); },
     edytujUzytkownika(el) { edytujUzytkownika(el.dataset.id); },
     zmienPin() { zmienPin(); },
@@ -2481,6 +2773,12 @@
   }
   document.addEventListener('input', (e) => zmianaPola(e, false));
   document.addEventListener('change', (e) => zmianaPola(e, true));
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches || !e.target.matches('[data-ustawienie="blokada"]')) return;
+    try { localStorage.setItem('magazyn-blokada-min', e.target.value); } catch (err) { /* */ }
+    const m = Number(e.target.value);
+    toast(m ? 'Ekran zablokuje się po ' + opisMinut(m) + ' bezczynności' : 'Automatyczna blokada wyłączona na tym komputerze', m ? 'ok' : 'blad');
+  });
 
   window.addEventListener('beforeunload', (e) => {
     if (app.szkic && app.widok === 'dokument' && czySzkicZmieniony(app.szkic)) {
@@ -2507,6 +2805,6 @@
     render();
   }
 
-  window.MagazynApp = { app, render, AKCJE };
+  window.MagazynApp = { app, render, AKCJE, sprawdzBezczynnosc };
   start();
 })();

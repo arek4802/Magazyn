@@ -52,6 +52,13 @@ def zapisz_z_pinem(p, pin='1234', nazwa_projektu='Projekt testowy'):
     okno_przycisk(p, 'Potwierdź')
 
 
+def zaloguj(p, kto, pin):
+    p.click(f'.osoba >> text={kto}')
+    p.wait_for_selector('#modal input[name=pin]')
+    p.fill('#modal input[name=pin]', pin)
+    okno_przycisk(p, 'Zaloguj')
+
+
 def wybierz(p, selektor, tekst):
     """Pisze w polu z listą i zatwierdza pierwszą pasującą pozycję Enterem."""
     pole = p.locator(selektor)
@@ -72,7 +79,14 @@ with sync_playwright() as pw:
       p.goto(URL)
       p.screenshot(path=ZRZUTY / '00-start.png')
       p.click('text=Wypróbuj na danych przykładowych')
+      # logowanie wymaga PIN-u
       p.click('.osoba >> text=Jan Kowalski')
+      p.fill('#modal input[name=pin]', '9999')
+      okno_przycisk(p, 'Zaloguj')
+      p.wait_for_selector('#modal >> text=Nieprawidłowy PIN')
+      assert p.locator('.kafle').count() == 0
+      p.fill('#modal input[name=pin]', '1234')
+      okno_przycisk(p, 'Zaloguj')
       p.wait_for_selector('.kafle')
       p.screenshot(path=ZRZUTY / '01-pulpit.png')
       # wyjście z formularza: pusty – bez pytania, przyciskiem Wróć i przyciskiem przeglądarki
@@ -188,12 +202,16 @@ with sync_playwright() as pw:
       ctx, p = nowa_strona(b)
       p.goto(URL + '?opfs=1')
       p.wait_for_selector('text=To nowy, pusty folder')
-      p.click('text=Dodaj użytkownika')
+      p.click('button:has-text("Dodaj pierwszego użytkownika")')
       p.fill('#modal input[name=imie]', 'Arek')
       p.fill('#modal input[name=nazwisko]', 'Testowy')
       p.fill('#modal input[name=pin]', '4321')
       p.fill('#modal input[name=pin2]', '4321')
-      okno_przycisk(p, 'Zapisz')
+      okno_przycisk(p, 'Dodaj użytkownika')
+      p.wait_for_selector('#modal >> text=zbyt prosty')  # kolejne cyfry
+      p.fill('#modal input[name=pin]', '4826')
+      p.fill('#modal input[name=pin2]', '4826')
+      okno_przycisk(p, 'Dodaj użytkownika')
       p.wait_for_selector('.kafle')
 
       # bilans otwarcia z nowymi modelami
@@ -231,7 +249,7 @@ with sync_playwright() as pw:
       l2 = p.locator('[data-p$=":lok"]').last
       l2.fill('Regał K')
       p.screenshot(path=ZRZUTY / '10-bo-formularz.png', full_page=True)
-      zapisz_z_pinem(p, '4321')
+      zapisz_z_pinem(p, '4826')
       p.wait_for_selector('text=Zapisano BO/')
       okno_przycisk(p, 'Drukuj formularz')
 
@@ -253,7 +271,7 @@ with sync_playwright() as pw:
       sn = p.locator('textarea[data-p$=":snTekst"]').first
       sn.fill('LGSN-100')
       p.locator('[data-p$=":lok"]').first.fill('Regał B')
-      zapisz_z_pinem(p, '4321')
+      zapisz_z_pinem(p, '4826')
       p.wait_for_selector('text=Zapisano PZ/2026/0001')
       okno_przycisk(p, 'Później')
 
@@ -280,7 +298,7 @@ with sync_playwright() as pw:
       assert p.locator('.wzz-alert').count() == 1, 'brak ostrzeżenia WZZ'
       p.fill('[data-f=powod]', 'Pilna wymiana u klienta')
       p.screenshot(path=ZRZUTY / '11-wzz-formularz.png', full_page=True)
-      zapisz_z_pinem(p, '4321')
+      zapisz_z_pinem(p, '4826')
       p.wait_for_selector('text=Zapisano WZZ/2026/0001')
       okno_przycisk(p, 'Drukuj formularz')
       p.emulate_media(media='print')
@@ -299,7 +317,7 @@ with sync_playwright() as pw:
       p.locator('tr:has-text("Cat6A") button:has-text("Dodaj")').click()
       p.locator('[data-p="0:ilosc"]').fill('20')
       p.locator('[data-p="0:lok"]').fill('Regał K')
-      zapisz_z_pinem(p, '4321')
+      zapisz_z_pinem(p, '4826')
       p.wait_for_selector('text=Zapisano ZW/2026/0001')
       okno_przycisk(p, 'Później')
 
@@ -313,7 +331,7 @@ with sync_playwright() as pw:
       p.locator('.stopka-formularza button.glowny').click()
       p.fill('#modal input[name=pin]', '0000')
       okno_przycisk(p, 'Potwierdź')
-      assert p.locator('text=Nieprawidłowy PIN').count() == 1
+      p.wait_for_selector('#modal >> text=Nieprawidłowy PIN')
       okno_przycisk(p, 'Wróć')
       p.click('.stopka-formularza >> text=Porzuć')
       okno_przycisk(p, 'Porzuć dokument')
@@ -333,9 +351,101 @@ with sync_playwright() as pw:
       pz = p.evaluate('() => [...window.MagazynApp.app.st.dokumenty.values()].map(d => d.ev.dane).find(d => d.rodzaj === "PZ")')
       assert pz['dostawcaId'] == 'wb-polsound' and pz['dostawcaDane']['nip'] == '5260307175' and pz['projektNazwa'] == 'Biuro testowe – sala A', pz
 
+      # blokada ekranu ręczna: szkic czeka, zły PIN odrzucony
+      p.click('.szybkie button:has-text("Wydanie")')
+      wybierz(p, '[data-f=projekt]', 'serwerow')
+      p.click('header button:has-text("Zablokuj")')
+      p.wait_for_selector('text=Ekran zablokowany')
+      assert p.locator('nav').count() == 0
+      p.fill('form.blokada input[name=pin]', '1111')
+      p.keyboard.press('Enter')
+      p.wait_for_selector('text=Nieprawidłowy PIN')
+      p.screenshot(path=ZRZUTY / '17-blokada.png')
+      p.fill('form.blokada input[name=pin]', '4826')
+      p.keyboard.press('Enter')
+      p.wait_for_selector('h1:has-text("Wydanie na projekt")')
+      assert p.locator('[data-f=projekt]').input_value() == 'P-600', 'szkic powinien przetrwać blokadę'
+      # blokada automatyczna po bezczynności
+      p.evaluate('() => { localStorage.setItem("magazyn-blokada-min", "5"); window.MagazynApp.app.aktywnosc = Date.now() - 6 * 60000; window.MagazynApp.sprawdzBezczynnosc(); }')
+      p.wait_for_selector('text=Ekran zablokowany')
+      p.fill('form.blokada input[name=pin]', '4826')
+      p.keyboard.press('Enter')
+      p.wait_for_selector('h1:has-text("Wydanie na projekt")')
+      p.click('.stopka-formularza >> text=Porzuć')
+      okno_przycisk(p, 'Porzuć dokument')
+
+      # drugi użytkownik: PIN startowy → własny PIN przy pierwszym logowaniu
+      p.click('nav a[data-w=ustawienia]')
+      p.click('button:has-text("Dodaj użytkownika")')
+      p.fill('#modal input[name=imie]', 'Ewa')
+      p.fill('#modal input[name=nazwisko]', 'Nowa')
+      p.fill('#modal input[name=pin]', '5937')
+      p.fill('#modal input[name=pin2]', '5937')
+      okno_przycisk(p, 'Dodaj użytkownika')
+      p.wait_for_selector('td:has-text("Ewa Nowa")')
+      p.click('header .uzytkownik')
+      okno_przycisk(p, 'Wyloguj')
+      p.wait_for_selector('h1:has-text("Zaloguj się")')
+      assert p.locator('text=Dodaj pierwszego użytkownika').count() == 0, 'bez logowania nie można zakładać kont'
+      zaloguj(p, 'Ewa Nowa', '5937')
+      p.wait_for_selector('#modal >> text=Ustaw własny PIN')
+      p.fill('#modal input[name=pin]', '5937')
+      p.fill('#modal input[name=pin2]', '5937')
+      okno_przycisk(p, 'Ustaw PIN')
+      p.wait_for_selector('#modal >> text=musi być inny')
+      p.fill('#modal input[name=pin]', '7140')
+      p.fill('#modal input[name=pin2]', '7140')
+      okno_przycisk(p, 'Ustaw PIN')
+      p.wait_for_selector('.kafle')
+      # cudzy profil: tylko podgląd, reset PIN-u i wyłączenie konta
+      p.click('nav a[data-w=ustawienia]')
+      p.locator('tr[data-a]:has-text("Arek Testowy")').click()
+      p.wait_for_selector('#modal button:has-text("Resetuj PIN")')
+      assert p.locator('#modal input[name=imie]').count() == 0, 'cudzego profilu nie można edytować'
+      okno_przycisk(p, 'Resetuj PIN')
+      p.fill('#modal input[name=pin]', '2580')
+      p.fill('#modal input[name=pin2]', '2580')
+      p.fill('#modal input[name=moj]', '0000')
+      okno_przycisk(p, 'Resetuj PIN')
+      p.wait_for_selector('#modal >> text=Twój PIN jest nieprawidłowy')
+      p.fill('#modal input[name=moj]', '7140')
+      okno_przycisk(p, 'Resetuj PIN')
+      p.wait_for_selector('td:has-text("PIN tymczasowy")')
+      p.click('header .uzytkownik')
+      okno_przycisk(p, 'Wyloguj')
+      # Arek: stary PIN już nie działa, po resecie widzi, kto go zrobił
+      p.click('.osoba >> text=Arek Testowy')
+      p.fill('#modal input[name=pin]', '4826')
+      okno_przycisk(p, 'Zaloguj')
+      p.wait_for_selector('#modal >> text=Nieprawidłowy PIN')
+      p.fill('#modal input[name=pin]', '2580')
+      okno_przycisk(p, 'Zaloguj')
+      p.wait_for_selector('#modal >> text=zresetował(a) Ewa Nowa')
+      p.screenshot(path=ZRZUTY / '18-po-resecie.png')
+      p.fill('#modal input[name=pin]', '4826')
+      p.fill('#modal input[name=pin2]', '4826')
+      okno_przycisk(p, 'Ustaw PIN')
+      p.wait_for_selector('.kafle')
+      opisy = p.evaluate('() => window.MagazynApp.app.st.zdarzenia.filter(e => e.typ === "UZYTK").map(e => window.MagazynCore.opisZdarzenia(window.MagazynApp.app.st, e))')
+      assert any(o.startswith('Reset PIN-u: Arek Testowy') for o in opisy), opisy
+      # pięć błędnych PIN-ów = minuta przerwy
+      p.click('header .uzytkownik')
+      okno_przycisk(p, 'Wyloguj')
+      p.click('.osoba >> text=Ewa Nowa')
+      for _ in range(5):
+          p.fill('#modal input[name=pin]', '1357')
+          okno_przycisk(p, 'Zaloguj')
+          p.wait_for_timeout(250)
+      p.wait_for_selector('#modal >> text=Za dużo błędnych prób')
+      p.fill('#modal input[name=pin]', '7140')
+      okno_przycisk(p, 'Zaloguj')
+      p.wait_for_timeout(300)
+      assert p.locator('.kafle').count() == 0, 'w czasie przerwy nawet dobry PIN nie loguje'
+      okno_przycisk(p, 'Wróć')
+
       # odświeżenie strony = ponowny odczyt plików z folderu
       p.goto(URL + '?opfs=1')
-      p.click('.osoba >> text=Arek Testowy')
+      zaloguj(p, 'Arek Testowy', '4826')
       p.wait_for_selector('.kafle')
       p.screenshot(path=ZRZUTY / '14-pulpit-po-odczycie.png')
       p.click('nav a[data-w=problemy]')

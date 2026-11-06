@@ -181,6 +181,40 @@
     return sha256hex('magazyn-pin|' + salt + '|' + String(pin));
   }
 
+  /**
+   * PIN-y zapisujemy jako PBKDF2-SHA256 (150 000 powtórzeń) – sprawdzenie jednego PIN-u trwa ułamek sekundy,
+   * ale odgadywanie wszystkich kombinacji z pliku jest tysiące razy wolniejsze niż przy zwykłym skrócie.
+   * Starsze konta (pinAlg pusty) mają zwykły SHA-256 – działają dalej, a przy zmianie PIN-u przechodzą na PBKDF2.
+   */
+  const PIN_ALG = 'pbkdf2-sha256-150k';
+  async function hashPinMocny(salt, pin) {
+    const enc = new TextEncoder();
+    const klucz = await globalThis.crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+    const bity = await globalThis.crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode('magazyn-pin|' + salt), iterations: 150000 }, klucz, 256);
+    return Array.from(new Uint8Array(bity)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /** Dane do zapisania w profilu po ustawieniu PIN-u. */
+  async function noweDanePinu(pin) {
+    const pinSalt = noweId(16);
+    return { pinSalt, pinHash: await hashPinMocny(pinSalt, pin), pinAlg: PIN_ALG };
+  }
+
+  async function sprawdzPin(uzytkownik, pin) {
+    if (!uzytkownik || !uzytkownik.pinHash || !/^\d{4,8}$/.test(String(pin || ''))) return false;
+    const h = uzytkownik.pinAlg === PIN_ALG ? await hashPinMocny(uzytkownik.pinSalt, pin) : await hashPin(uzytkownik.pinSalt, pin);
+    return h === uzytkownik.pinHash;
+  }
+
+  /** Zbyt proste PIN-y: same takie same cyfry albo kolejne cyfry (1234, 4321…). */
+  function slabyPin(pin) {
+    const p = String(pin || '');
+    if (/^(\d)\1+$/.test(p)) return true;
+    const rosn = '01234567890123456789';
+    const mal = '98765432109876543210';
+    return rosn.includes(p) || mal.includes(p);
+  }
+
   function formatNumer(rodzaj, rok, nr) {
     return rodzaj + '/' + rok + '/' + String(nr).padStart(4, '0');
   }
@@ -777,7 +811,14 @@
       case 'UZUP': return 'Oznaczono jako uzupełnione: ' + (d.numer || '') + ' poz. ' + (Number(d.idx) + 1) + (d.uwagi ? ' · ' + d.uwagi : '');
       case 'MODEL': return 'Kartoteka: ' + (d.producent ? d.producent + ' ' : '') + (d.model || opisModelu(st, d.modelId)) + (d.kartaPlik || d.link ? ' (z kartą katalogową)' : '');
       case 'KLIENT': return 'Klient: ' + (d.nazwa || d.klientId);
-      case 'UZYTK': return 'Użytkownik: ' + (d.imie || '') + ' ' + (d.nazwisko || '') + (d.aktywny === false ? ' (dezaktywowany)' : '');
+      case 'UZYTK': {
+        const u = st.uzytkownicy.get(d.userId) || {};
+        const kto = ((d.imie || u.imie || '') + ' ' + (d.nazwisko || u.nazwisko || '')).trim();
+        if (d.pinResetPrzez) return 'Reset PIN-u: ' + kto + ' (do zmiany przy logowaniu)';
+        if (d.pinHash && !d.imie) return 'Zmiana PIN-u: ' + kto;
+        if (!d.imie && d.aktywny !== undefined) return (d.aktywny === false ? 'Dezaktywowano konto: ' : 'Przywrócono konto: ') + kto;
+        return 'Użytkownik: ' + kto + (d.aktywny === false ? ' (dezaktywowany)' : '');
+      }
       default: return ev.typ;
     }
   }
@@ -785,6 +826,7 @@
   return {
     WERSJA, RODZAJE, KATEGORIE, STANY_TECHNICZNE, DOSTAWCY_WBUDOWANI,
     canonical, sha256hex, zapieczetuj, sprawdzPieczec, noweId, zaokr, norm, normKlucz, hashPin,
+    PIN_ALG, noweDanePinu, sprawdzPin, slabyPin,
     kluczSzukania, pasujeDo, cyfry, poprawnyNip, poprawnyRegon,
     projektWgNumeru, nazwaProjektu, opisProjektu, listaProjektow, dostawcaWgNazwy,
     formatNumer, nazwaPlikuDokumentu, sciezkaZdarzenia, czyPoprawnaNazwaPliku,

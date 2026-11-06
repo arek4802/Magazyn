@@ -59,7 +59,8 @@ Magazyn AV/
 
 - Aplikacja działa w Edge i Chrome na komputerze. Na telefonie zostaje podgląd PDF-ów i Exceli w aplikacji OneDrive.
 - Synchronizacja OneDrive trwa od kilku sekund do kilku minut. Przed każdym zapisem dokumentu aplikacja ponownie czyta folder. Przycisk „Odśwież” wczytuje zmiany innych osób.
-- Ról nie ma. PIN tylko potwierdza, kto wystawił dokument.
+- Ról nie ma – w magazynie każdy może to samo. Każdy loguje się swoim PIN-em, a ekran blokuje się sam po bezczynności (domyślnie 15 minut). Swój profil i PIN zmienia tylko właściciel. Reset PIN-u albo wyłączenie cudzego konta trzeba potwierdzić własnym PIN-em; zostaje to w dzienniku, a osoba po resecie widzi przy logowaniu, kto go zrobił, i musi ustawić własny PIN.
+- PIN chroni przed korzystaniem z cudzego konta przy komputerze. Nie jest zabezpieczeniem przed kimś, kto ma dostęp do plików na OneDrive i wiedzę techniczną (PIN-y są zapisane jako skróty PBKDF2, ale 4–6 cyfr da się w końcu odgadnąć). Ręczne zmiany plików wychwyci Kontrola spójności.
 
 ## Rozwój
 

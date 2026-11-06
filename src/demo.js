@@ -19,9 +19,8 @@
     }
 
     async function uzytkownik(userId, imie, nazwisko, email) {
-      const salt = C.noweId(12);
-      const pinHash = await C.hashPin(salt, '1234');
-      return dodaj(C.noweZdarzenie(stan(), 'UZYTK', userId, { userId, imie, nazwisko, email, tel: '', aktywny: true, pinSalt: salt, pinHash }, krok(0.1)));
+      const pin = await C.noweDanePinu('1234');
+      return dodaj(C.noweZdarzenie(stan(), 'UZYTK', userId, Object.assign({ userId, imie, nazwisko, email, tel: '', aktywny: true }, pin), krok(0.1)));
     }
 
     await uzytkownik('jkowalski', 'Jan', 'Kowalski', 'jan.kowalski@example.com');

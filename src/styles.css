@@ -102,6 +102,16 @@ h1 .pomoc { width: 20px; height: 20px; font-size: 12px; }
 .lista-osob { display: grid; gap: 8px; }
 .osoba { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--linia); border-radius: 10px; background: var(--karta); cursor: pointer; font: inherit; font-weight: 600; text-align: left; transition: border-color .12s, background .12s; }
 .osoba:hover { border-color: var(--marka); background: var(--marka-tlo); }
+.osoba > span:nth-child(2) { flex: 1; }
+.osoba > .ik { width: 16px; height: 16px; color: var(--szary); }
+.osoba .znaczek { font-weight: 600; }
+.rzad-przyciskow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.kto-blokada { display: flex; align-items: center; gap: 14px; margin: 4px 0 6px; }
+.kto-blokada h1 { font-size: 24px; margin: 0; }
+.kto-blokada p { margin: 2px 0 0; display: flex; align-items: center; gap: 6px; }
+.kto-blokada .ik { width: 15px; height: 15px; }
+.awatar.duzy { width: 52px; height: 52px; font-size: 18px; flex: none; }
+.blokada .pin { font-size: 22px; letter-spacing: 6px; text-align: center; }
 .awatar { width: 30px; height: 30px; border-radius: 50%; background: var(--akcent); color: var(--marka-ciemna); display: inline-grid; place-items: center; font-weight: 800; font-size: 12px; flex: none; }
 
 /* ---------------------------------------------------------------- układ */

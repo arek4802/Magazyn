@@ -264,3 +264,26 @@ test('projekty: numer + nazwa, wyszukiwanie po nazwie, nazwa z dokumentu', async
   assert.ok(!C.pasujeDo('hotel delta', 'Hotel Gamma'));
   assert.equal(st.problemy.length, 0);
 });
+
+test('PIN: PBKDF2 dla nowych, zwykły skrót dla starszych kont, słabe PIN-y', async () => {
+  const nowy = await C.noweDanePinu('482913');
+  assert.equal(nowy.pinAlg, C.PIN_ALG);
+  assert.equal(nowy.pinHash.length, 64);
+  assert.ok(await C.sprawdzPin(nowy, '482913'));
+  assert.ok(!(await C.sprawdzPin(nowy, '482914')));
+  assert.ok(!(await C.sprawdzPin(nowy, '')));
+  const stary = { pinSalt: 'abc', pinHash: await C.hashPin('abc', '1234') };
+  assert.ok(await C.sprawdzPin(stary, '1234'));
+  assert.ok(!(await C.sprawdzPin(stary, '1235')));
+  for (const p of ['1111', '1234', '4321', '0123456', '987654']) assert.ok(C.slabyPin(p), p);
+  for (const p of ['482913', '1357', '2580']) assert.ok(!C.slabyPin(p), p);
+});
+
+test('dziennik: opisy zmian PIN-u, resetu i dezaktywacji', async () => {
+  const z = await baza();
+  const st = C.zbudujStan(z);
+  const ev = (d) => C.noweZdarzenie(st, 'UZYTK', 'u1', d, teraz());
+  assert.equal(C.opisZdarzenia(st, ev({ userId: 'u1', pinHash: 'x', pinSalt: 'y' })), 'Zmiana PIN-u: Jan Kowalski');
+  assert.match(C.opisZdarzenia(st, ev({ userId: 'u1', pinHash: 'x', pinSalt: 'y', pinDoZmiany: true, pinResetPrzez: 'u2' })), /^Reset PIN-u: Jan Kowalski/);
+  assert.equal(C.opisZdarzenia(st, ev({ userId: 'u1', aktywny: false })), 'Dezaktywowano konto: Jan Kowalski');
+});
