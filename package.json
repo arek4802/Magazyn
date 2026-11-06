@@ -1,0 +1,11 @@
+{
+  "name": "magazyn-av",
+  "version": "0.1.0",
+  "description": "Magazyn urządzeń i materiałów instalacyjnych MAASCK – aplikacja w jednym pliku HTML, dane w folderze OneDrive",
+  "private": true,
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "UNLICENSED"
+}
