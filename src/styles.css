@@ -74,6 +74,9 @@ p { margin: 0 0 10px; }
 .karta-btn .ik { width: 15px; height: 15px; vertical-align: 0; }
 .karta-btn:hover { background: var(--marka-tlo); border-color: var(--marka); }
 .karta-btn.z-tekstem { margin-left: 0; padding: 3px 8px; }
+.karta-btn + .karta-btn { margin-left: 4px; }
+.przyciski-karty { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.przyciski-karty .karta-btn { margin-left: 0; }
 
 /* ---------------------------------------------------------------- pomoc */
 .pomoc {

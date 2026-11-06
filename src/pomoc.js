@@ -13,7 +13,7 @@
     dokumenty: 'Wszystkie dokumenty magazynowe. Kliknij dokument, żeby go wydrukować, dołączyć skan podpisu albo anulować.',
     uzupelnienia: 'Sprzęt kupiony pod projekt, który poszedł wydaniem zastępczym (WZZ) na inny projekt. Pozycja zostaje na liście, dopóki ktoś nie oznaczy jej jako uzupełnionej.',
     raporty: 'Gotowe zestawienia. Każde można wyeksportować do Excela przyciskiem w prawym górnym rogu.',
-    kartoteka: 'Lista modeli, które mogą leżeć w magazynie. Model dodajesz raz, potem wybierasz go w dokumentach.',
+    kartoteka: 'Biblioteka wszystkich urządzeń i materiałów, które macie albo kupujecie. Urządzenie dodajesz raz – ze stroną produktu i kartą katalogową – a potem wybierasz je z listy w dokumentach.',
     klienci: 'Lista firm, do których wydajecie sprzęt. Nie jest obowiązkowa – przy wydaniu można wpisać dowolną nazwę. Dane firmy pobierzesz po NIP z rejestru.',
     projekty: 'Rejestr projektów: numer, nazwa, klient i adres obiektu. Projekt możesz potem wybierać z listy po numerze albo po nazwie, a przy wydaniu klient i adres wpiszą się same.',
     dostawcy: 'Biblioteka dostawców z danymi z rejestrów (pełna nazwa, NIP, REGON, KRS, adres). Przy przyjęciu wybierasz dostawcę z listy, a jego dane trafiają na formularz.',
@@ -51,7 +51,8 @@
     jednostkaZakupu: 'Tylko dla materiałów. Jeśli kupujecie np. kabel w szpulach po 305 m albo złącza w kartonach po 50 szt., zaznacz to i wpisz nazwę opakowania oraz ile w nim jest. Przy przyjęciu wpiszesz „2 szpule”, a aplikacja zapisze 610 m. Stan nadal liczy się w jednostce (m, szt.).',
     stanMin: 'Gdy stan w magazynie spadnie poniżej tej wartości, model pojawi się w raporcie „Poniżej minimum” i na pulpicie.',
     status: '„EOL” oznacza model wycofany przez producenta – pojawi się w raporcie „EOL na stanie”. „Wycofany” chowa model z podpowiedzi w nowych dokumentach.',
-    karta: 'Link do karty katalogowej na stronie producenta albo plik PDF zapisany w folderze magazynu. Przycisk „Szukaj” otwiera wyszukiwarkę z nazwą modelu.',
+    karta: 'Karta katalogowa w PDF: wklej link do pliku albo dołącz plik – zapisany w folderze magazynu działa też bez internetu. „Szukaj PDF” otwiera wyszukiwarkę z nazwą urządzenia.',
+    strona: 'Link do strony urządzenia u producenta (opis, zdjęcia, pliki do pobrania). „Szukaj” otwiera wyszukiwarkę z nazwą urządzenia. Jeśli wkleisz tu link do PDF-a, aplikacja zapisze go jako kartę katalogową.',
     pin: 'PIN to Twoje hasło: logujesz się nim, odblokowujesz ekran i potwierdzasz dokumenty. Nie podawaj go nikomu. Po 5 błędnych próbach logowanie wstrzymuje się na minutę.',
     przenies: 'Zmienia miejsce sprzętu w magazynie (np. z regału na antresolę). Nie tworzy formularza do podpisu, ale zostaje zapisane w dzienniku.',
     eksport: 'Zapisuje to, co widzisz na ekranie (z filtrami i w tej samej kolejności sortowania), jako plik Excel. Kopia trafia też do folderu „eksporty”.',
@@ -77,7 +78,7 @@
         <li>Wybierz dostawcę z listy (biblioteka dostawców) i wpisz numer faktury albo WZ dostawcy.</li>
         <li>Jeśli towar jest zamówiony pod konkretny projekt, zaznacz <b>Kupione pod projekt</b> i wybierz projekt z listy (po numerze albo nazwie). Ten sprzęt będzie zarezerwowany dla projektu.</li>
         <li>Dla każdej pozycji wybierz model (zacznij pisać nazwę), wpisz lokalizację i numery seryjne (jeden w linii, można wkleić) albo ilość.</li>
-        <li>Brakuje modelu? Kliknij <b>Nowy</b> obok pola modelu – model zapisze się w kartotece i od razu wskoczy do pozycji.</li>
+        <li>Brakuje urządzenia? Kliknij <b>Nowy</b> obok pola modelu – urządzenie zapisze się w bibliotece i od razu wskoczy do pozycji.</li>
         <li>Kliknij <b>Zapisz dokument</b>, potwierdź PIN-em, wydrukuj formularz i daj do podpisu.</li>
       </ol>` },
     { id: 'wydanie', tytul: 'Wydanie na projekt (WZ)', html: `
@@ -107,13 +108,14 @@
         <li>Podpisany formularz sfotografuj albo zeskanuj, otwórz dokument (widok <b>Dokumenty</b>) i kliknij <b>Dołącz skan podpisu</b>. Plik zapisze się w folderze „podpisane”.</li>
         <li>Dokumenty bez skanu widać w raporcie <b>Bez podpisu</b> i na pulpicie.</li>
       </ul>` },
-    { id: 'kartoteka', tytul: 'Kartoteka modeli i karty katalogowe', html: `
+    { id: 'kartoteka', tytul: 'Biblioteka urządzeń, strony produktów i karty katalogowe', html: `
       <ul>
-        <li>Model dodajesz raz: kategoria, producent, model, kod producenta (P/N), opcjonalnie EAN.</li>
+        <li>Urządzenie (albo materiał) dodajesz do biblioteki raz: kategoria, producent, model, kod producenta (P/N), opcjonalnie EAN.</li>
         <li><b>Śledź po numerze seryjnym</b> zaznacz dla urządzeń z gwarancją, które trafiają do klienta. Materiały liczone są na sztuki albo metry.</li>
         <li><b>Opakowanie zakupu</b> (tylko materiały) pozwala przyjmować np. kabel w szpulach: zaznacz „kupujecie w opakowaniach”, wpisz „szpula” i 305, a przy przyjęciu aplikacja przeliczy szpule na metry. Przy urządzeniach z numerem seryjnym tego pola nie ma.</li>
-        <li><b>Karta katalogowa:</b> wklej link ze strony producenta albo dołącz plik PDF. Przycisk „Szukaj w internecie” otworzy wyszukiwarkę z nazwą modelu. Kartę otworzysz potem jednym kliknięciem w kartotece, stanie magazynu i dokumentach (ikona <b>karty</b>).</li>
-        <li>Status <b>EOL</b> oznacza model wycofany przez producenta – zobaczysz go w raporcie „EOL na stanie”.</li>
+        <li><b>Strona produktu</b> to link do strony urządzenia u producenta. <b>Karta katalogowa</b> to PDF: link do pliku albo plik dołączony do folderu magazynu (działa bez internetu). Przyciski „Szukaj” otwierają wyszukiwarkę z nazwą urządzenia.</li>
+        <li>Stronę i kartę otworzysz jednym kliknięciem w bibliotece, stanie magazynu, przy wydaniu i w dokumentach: ikona <b>globusa</b> to strona produktu, ikona <b>dokumentu</b> to karta katalogowa.</li>
+        <li>Status <b>EOL</b> oznacza urządzenie wycofane przez producenta – zobaczysz je w raporcie „EOL na stanie”.</li>
       </ul>` },
     { id: 'projekty', tytul: 'Projekty, klienci i dostawcy', html: `
       <ul>

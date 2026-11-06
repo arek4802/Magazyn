@@ -2,7 +2,7 @@
  * Magazyn AV – logika magazynu (bez interfejsu).
  *
  * Zasada: wszystko, co się wydarzyło, jest zapisane jako niezmienne zdarzenie
- * (osobny plik JSON). Stan magazynu, kartoteki i raporty są zawsze wyliczane
+ * (osobny plik JSON). Stan magazynu, biblioteki i raporty są zawsze wyliczane
  * od nowa z listy zdarzeń. Nic nie jest nadpisywane ani kasowane.
  *
  * Działa w przeglądarce (window.MagazynCore) i w Node (require).
@@ -809,7 +809,7 @@
       case 'PRZENIES': return 'Przeniesiono ' + opisModelu(st, d.modelId) + (d.sn ? ' SN ' + d.sn : ' · ' + d.ilosc + ' ' + jm(st, d.modelId)) + ' z „' + d.z + '” do „' + d.do + '”';
       case 'SKAN': return 'Dołączono skan do ' + (d.numer || '') + ': ' + d.plik;
       case 'UZUP': return 'Oznaczono jako uzupełnione: ' + (d.numer || '') + ' poz. ' + (Number(d.idx) + 1) + (d.uwagi ? ' · ' + d.uwagi : '');
-      case 'MODEL': return 'Kartoteka: ' + (d.producent ? d.producent + ' ' : '') + (d.model || opisModelu(st, d.modelId)) + (d.kartaPlik || d.link ? ' (z kartą katalogową)' : '');
+      case 'MODEL': return 'Biblioteka urządzeń: ' + (d.producent ? d.producent + ' ' : '') + (d.model || opisModelu(st, d.modelId)) + (d.kartaPlik || d.kartaLink ? ' (z kartą katalogową)' : d.link ? ' (ze stroną produktu)' : '');
       case 'KLIENT': return 'Klient: ' + (d.nazwa || d.klientId);
       case 'UZYTK': {
         const u = st.uzytkownicy.get(d.userId) || {};

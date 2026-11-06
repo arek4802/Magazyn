@@ -24,7 +24,7 @@ Przy kolejnym uruchomieniu wystarczy przycisk „Połącz ponownie”. Przycisk 
 | **WZZ** – wydanie zastępcze | sprzęt kupiony pod inny projekt; czerwone ostrzeżenie, obowiązkowy powód, ramka na wydruku, wpis na listę „Do uzupełnienia” |
 | **ZW** – zwrot | nadwyżki i niewykorzystany sprzęt z budowy |
 
-W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dymek po najechaniu), przycisk **Pomoc** z pełną instrukcją oraz klawisz **F1**. Do każdego modelu można dodać **kartę katalogową**: link do strony producenta albo plik PDF zapisany w folderze `karty/`. Kartę otwierasz potem jednym kliknięciem z kartoteki, stanu magazynu i dokumentów.
+W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dymek po najechaniu), przycisk **Pomoc** z pełną instrukcją oraz klawisz **F1**. W **bibliotece urządzeń** każde urządzenie może mieć **stronę produktu** (link do strony u producenta) i **kartę katalogową** (link do PDF-a albo plik PDF zapisany w folderze `karty/`). Oba otwierasz jednym kliknięciem z biblioteki, stanu magazynu i dokumentów.
 
 **Projekty** mają numer i nazwę (np. „P-2026-014 – Kancelaria Beta”), klienta i adres obiektu. W formularzach projekt wybiera się z listy, szukając po kawałku numeru albo nazwy. Przy wydaniu klient i adres wpisują się same. Nowy numer wpisany w dokumencie wywołuje przy zapisie pytanie o nazwę projektu.
 
@@ -34,7 +34,7 @@ W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dym
 
 **Sortowanie**: kliknięcie nagłówka kolumny w każdej tabeli sortuje rosnąco, drugie malejąco, trzecie przywraca zwykłą kolejność. Daty i ilości sortują się jak liczby, wybór jest zapamiętywany, a eksport do Excela ma tę samą kolejność.
 
-Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z akcją „Przenieś”, urządzenia z historią po numerze seryjnym, raporty, kartoteka modeli, klienci, dziennik zmian, kontrola spójności i eksport każdej listy do Excela. Każdy dokument zapisuje się po potwierdzeniu PIN-em i drukuje jako formularz do podpisu z nagłówkiem firmy i kodem QR.
+Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z akcją „Przenieś”, urządzenia z historią po numerze seryjnym, raporty, biblioteka urządzeń, klienci, dziennik zmian, kontrola spójności i eksport każdej listy do Excela. Każdy dokument zapisuje się po potwierdzeniu PIN-em i drukuje jako formularz do podpisu z nagłówkiem firmy i kodem QR.
 
 ## Zasady przechowywania danych
 
@@ -48,9 +48,9 @@ Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z a
 Magazyn AV/
 ├── Magazyn.html
 ├── dokumenty/2026/     BO, PZ, WZ, WZZ, ZW – jeden plik na dokument
-├── zdarzenia/2026-11/  kartoteka, projekty, klienci, dostawcy, użytkownicy, przeniesienia, anulowania, skany
+├── zdarzenia/2026-11/  biblioteka urządzeń, projekty, klienci, dostawcy, użytkownicy, przeniesienia, anulowania, skany
 ├── podpisane/2026/     skany podpisanych formularzy
-├── karty/              karty katalogowe (PDF) dołączone do modeli
+├── karty/              karty katalogowe (PDF) dołączone do urządzeń
 ├── eksporty/           kopie eksportów do Excela
 └── kopie/              kopie tygodniowe
 ```

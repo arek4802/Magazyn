@@ -154,6 +154,7 @@
     proj: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
     dost: '<path d="M2 6h12v10H2z"/><path d="M14 9h4l3 3.5V16h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
     dol: '<path d="M6 9l6 6 6-6"/>',
+    www: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
     klodka: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     wyloguj: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
     pobierz: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
@@ -425,11 +426,18 @@
   }
 
   const przyciskEksportu = (id) => '<button class="przycisk" data-a="eksport" data-t="' + id + '" data-tip="' + esc(P.TIPY.eksport) + '">' + ikona('xls') + 'Eksport do Excela</button>';
-  const maKarte = (m) => !!(m && (m.link || m.kartaPlik));
+  // Strona produktu = link do strony urządzenia u producenta. Karta katalogowa = PDF: plik w folderze magazynu
+  // albo link do PDF-a. (Starsze wpisy miały jedno pole „link” – jeśli prowadzi do PDF-a, traktujemy go jak kartę.)
+  const jestPdf = (u) => /\.pdf([?#]|$)/i.test(String(u || ''));
+  const stronaProduktu = (m) => (m && m.link && !jestPdf(m.link) ? m.link : '');
+  const linkKarty = (m) => (m ? m.kartaLink || (jestPdf(m.link) ? m.link : '') : '');
+  const maKarte = (m) => !!(m && (m.kartaPlik || linkKarty(m)));
   const przyciskKarty = (modelId, z_tekstem) => {
     const m = app.st.modele.get(modelId);
-    if (!maKarte(m)) return '';
-    return '<button class="karta-btn' + (z_tekstem ? ' z-tekstem' : '') + '" data-a="karta" data-m="' + esc(modelId) + '" data-tip="Otwórz kartę katalogową' + (m.kartaPlik ? ' (plik PDF w folderze)' : '') + '" aria-label="Karta katalogowa">' + ikona('karta') + (z_tekstem ? 'Karta katalogowa' : '') + '</button>';
+    if (!m) return '';
+    const kl = 'karta-btn' + (z_tekstem ? ' z-tekstem' : '');
+    return (stronaProduktu(m) ? '<button class="' + kl + ' strona-btn" data-a="stronaProduktu" data-m="' + esc(modelId) + '" data-tip="Otwórz stronę produktu u producenta" aria-label="Strona produktu">' + ikona('www') + (z_tekstem ? 'Strona produktu' : '') + '</button>' : '') +
+      (maKarte(m) ? '<button class="' + kl + '" data-a="karta" data-m="' + esc(modelId) + '" data-tip="Otwórz kartę katalogową (PDF)' + (m.kartaPlik ? ' – plik zapisany w folderze, działa bez internetu' : '') + '" aria-label="Karta katalogowa">' + ikona('karta') + (z_tekstem ? 'Karta katalogowa' : '') + '</button>' : '');
   };
 
   // ------------------------------------------------------------ ekrany wejściowe
@@ -497,7 +505,7 @@
     ['raporty', 'Raporty', 'rap'],
     ['-'],
     ['projekty', 'Projekty', 'proj'],
-    ['kartoteka', 'Kartoteka modeli', 'kart'],
+    ['kartoteka', 'Biblioteka urządzeń', 'kart'],
     ['klienci', 'Klienci', 'kli'],
     ['dostawcy', 'Dostawcy', 'dost'],
     ['dziennik', 'Dziennik zmian', 'dz'],
@@ -569,12 +577,12 @@
     const powitanie = godzina < 18 ? 'Dzień dobry' : 'Dobry wieczór';
     return naglowekWidoku(powitanie + '!', esc(app.user.imie + ' ' + app.user.nazwisko) + ' · stan na ' + fmtCzas(new Date().toISOString()), '', 'pulpit') +
       (bezBo ? '<section class="karta pierwsze-kroki"><h2>Pierwsze kroki</h2><ol>' +
-        '<li><b>Inwentaryzacja.</b> Spiszcie wszystko, co leży w magazynie, dokumentem <b>Bilans otwarcia (BO)</b> – miejsce po miejscu. Modele dodasz do kartoteki w trakcie wpisywania.</li>' +
+        '<li><b>Inwentaryzacja.</b> Spiszcie wszystko, co leży w magazynie, dokumentem <b>Bilans otwarcia (BO)</b> – miejsce po miejscu. Brakujące urządzenia dodasz do biblioteki w trakcie wpisywania.</li>' +
         '<li><b>Codzienna praca.</b> Dostawy wpisuj przyjęciem (PZ), wydania na budowę wydaniem (WZ), a nadwyżki wracające z budowy zwrotem (ZW).</li>' +
         '<li><b>Podpisy.</b> Każdy dokument wydrukuj, daj do podpisu i dołącz zdjęcie lub skan.</li></ol>' +
         '<div class="przyciski"><button class="przycisk glowny" data-a="nowyDok" data-r="BO">' + ikona('bo') + 'Rozpocznij bilans otwarcia</button><button class="przycisk" data-a="idz" data-w="pomoc">' + ikona('pomoc') + 'Instrukcja</button></div></section>' : '') +
       '<div class="kafle">' +
-        kafel('kart', app.st.modele.size, odm(app.st.modele.size, 'model w kartotece', 'modele w kartotece', 'modeli w kartotece'), idz('kartoteka')) +
+        kafel('kart', app.st.modele.size, odm(app.st.modele.size, 'urządzenie w bibliotece', 'urządzenia w bibliotece', 'urządzeń w bibliotece'), idz('kartoteka')) +
         kafel('urz', naStanie, odm(naStanie, 'urządzenie w magazynie', 'urządzenia w magazynie', 'urządzeń w magazynie'), idz('urzadzenia')) +
         kafel('wyd', wydaniaMiesiac, odm(wydaniaMiesiac, 'wydanie w tym miesiącu', 'wydania w tym miesiącu', 'wydań w tym miesiącu'), idz('dokumenty')) +
         kafel('uzup', otwarte.length, odm(otwarte.length, 'pozycja do uzupełnienia', 'pozycje do uzupełnienia', 'pozycji do uzupełnienia') + ' po WZZ', idz('uzupelnienia'), otwarte.length ? 'czerwony' : '') +
@@ -638,7 +646,7 @@
     const html = tabela('stan', 'Stan magazynu', ['Kategoria', 'Model', 'Kod producenta', 'Wolne', 'Pod projekty', 'Razem', 'U klientów', 'Min.'], wiersze, {
       liczbowe: [3, 4, 5, 6, 7],
       naglowkiXls: ['Kategoria', 'Model', 'Kod producenta', 'Wolne', 'Pod projekty', 'Razem w magazynie', 'Wydane do klientów', 'Stan minimalny', 'Jednostka', 'Status'],
-      pusto: app.st.modele.size ? 'Nic nie pasuje do filtra' : 'Kartoteka jest pusta. Dodaj modele w kartotece albo od razu w dokumencie przyjęcia.',
+      pusto: app.st.modele.size ? 'Nic nie pasuje do filtra' : 'Biblioteka urządzeń jest pusta. Dodaj urządzenia w bibliotece albo od razu w dokumencie przyjęcia.',
     });
     return naglowekWidoku('Stan magazynu', 'Wolne + kupione pod projekty = razem w magazynie. Kliknij wiersz, aby zobaczyć szczegóły.', przyciskEksportu('stan'), 'stan') +
       '<div class="filtry">' + poleSzukaj('stan', 'Szukaj modelu, producenta, kodu…') +
@@ -750,13 +758,13 @@
 
   WIDOKI.kartoteka = () => {
     const lista = Array.from(app.st.modele.values()).filter((m) => pasuje('kart', m.producent, m.model, m.pn, m.ean, m.kategoria)).sort((a, b) => (a.kategoria + a.producent + a.model).localeCompare(b.kategoria + b.producent + b.model, 'pl'));
-    const html = tabela('kartoteka', 'Kartoteka modeli', ['Kategoria', 'Producent', 'Model', 'Kod producenta', 'EAN', 'Nr seryjny', 'Jednostka', 'Stan min.', 'Status', 'Karta katalogowa'], lista.map((m) => ({
+    const html = tabela('kartoteka', 'Biblioteka urządzeń', ['Kategoria', 'Producent', 'Model', 'Kod producenta', 'EAN', 'Nr seryjny', 'Jednostka', 'Stan min.', 'Status', 'Strona i karta'], lista.map((m) => ({
       akcja: 'edytujModel" data-id="' + esc(m.modelId),
-      komorki: [esc(m.kategoria || ''), esc(m.producent || ''), '<b>' + esc(m.model) + '</b>', esc(m.pn || ''), esc(m.ean || ''), m.seryjny ? 'tak' : 'nie', esc(jmw(m.jednostka)) + (m.jednostkaZakupu ? ' <span class="szary">· ' + esc(m.jednostkaZakupu) + ' = ' + fmtL(m.przelicznik) + ' ' + esc(jmw(m.jednostka)) + '</span>' : ''), m.stanMin ? fmtL(m.stanMin) : '', m.status === 'EOL' ? '<span class="znaczek eol">EOL</span>' : m.status === 'wycofany' ? '<span class="znaczek anul">wycofany</span>' : '<span class="szary">aktywny</span>', maKarte(m) ? przyciskKarty(m.modelId, true) : '<span class="szary maly">brak</span>'],
-      dane: [m.kategoria || '', m.producent || '', m.model, m.pn || '', m.ean || '', m.seryjny ? 'tak' : 'nie', jmw(m.jednostka), Number(m.stanMin) || null, m.status || 'aktywny', m.link || (m.kartaPlik ? 'plik: ' + m.kartaPlik : '')],
-    })), { pusto: 'Kartoteka jest pusta. Dodaj pierwszy model przyciskiem „Nowy model” albo od razu w bilansie otwarcia.' });
-    return naglowekWidoku('Kartoteka modeli', 'Urządzenia z gwarancją, które trafiają do klienta, śledź po numerze seryjnym. Materiały (kable, korytka) liczone są w metrach lub sztukach.', '<button class="przycisk glowny" data-a="edytujModel">' + ikona('plus') + 'Nowy model</button>' + przyciskEksportu('kartoteka'), 'kartoteka') +
-      '<div class="filtry">' + poleSzukaj('kart', 'Szukaj w kartotece…') + '</div>' + html;
+      komorki: [esc(m.kategoria || ''), esc(m.producent || ''), '<b>' + esc(m.model) + '</b>', esc(m.pn || ''), esc(m.ean || ''), m.seryjny ? 'tak' : 'nie', esc(jmw(m.jednostka)) + (m.jednostkaZakupu ? ' <span class="szary">· ' + esc(m.jednostkaZakupu) + ' = ' + fmtL(m.przelicznik) + ' ' + esc(jmw(m.jednostka)) + '</span>' : ''), m.stanMin ? fmtL(m.stanMin) : '', m.status === 'EOL' ? '<span class="znaczek eol">EOL</span>' : m.status === 'wycofany' ? '<span class="znaczek anul">wycofany</span>' : '<span class="szary">aktywny</span>', stronaProduktu(m) || maKarte(m) ? '<span class="przyciski-karty">' + przyciskKarty(m.modelId, true) + '</span>' : '<span class="szary maly">brak</span>'],
+      dane: [m.kategoria || '', m.producent || '', m.model, m.pn || '', m.ean || '', m.seryjny ? 'tak' : 'nie', jmw(m.jednostka), Number(m.stanMin) || null, m.status || 'aktywny', stronaProduktu(m), linkKarty(m) || (m.kartaPlik ? 'plik: ' + m.kartaPlik : '')],
+    })), { pusto: 'Biblioteka jest pusta. Dodaj pierwsze urządzenie przyciskiem „Nowe urządzenie” albo od razu w bilansie otwarcia.', bezSortowania: [9], naglowkiXls: ['Kategoria', 'Producent', 'Model', 'Kod producenta', 'EAN', 'Nr seryjny', 'Jednostka', 'Stan min.', 'Status', 'Strona produktu', 'Karta katalogowa'] });
+    return naglowekWidoku('Biblioteka urządzeń', 'Wszystko, co macie albo kupujecie: urządzenia i materiały instalacyjne. Urządzenie dodajesz raz – ze stroną produktu i kartą katalogową – a potem wybierasz je w dokumentach.', '<button class="przycisk glowny" data-a="edytujModel">' + ikona('plus') + 'Nowe urządzenie</button>' + przyciskEksportu('kartoteka'), 'kartoteka') +
+      '<div class="filtry">' + poleSzukaj('kart', 'Szukaj w bibliotece: producent, model, kod, kategoria…') + '</div>' + html;
   };
 
   WIDOKI.klienci = () => {
@@ -896,7 +904,7 @@
     return el.name ? 'n:' + el.name : '';
   }
 
-  const NOWY_ETYKIETA = { projekty: 'Nowy projekt', dostawcy: 'Nowy dostawca', klienci: 'Nowy klient', modele: 'Nowy model w kartotece' };
+  const NOWY_ETYKIETA = { projekty: 'Nowy projekt', dostawcy: 'Nowy dostawca', klienci: 'Nowy klient', modele: 'Nowe urządzenie w bibliotece' };
 
   function wybierak(zrodlo, cel, wartosc, o = {}) {
     const pole = '<div class="wybierak"><input ' + atrybutyCelu(cel) + ' ' + (o.atr || '') + ' value="' + esc(wartosc) + '" data-wybierak="' + zrodlo + '"' + (o.nowy ? ' data-nowy="1"' : '') +
@@ -1277,7 +1285,7 @@
         return '<div class="pozycja">' +
           '<div class="pozycja-nr">' + (i + 1) + '</div>' +
           '<div class="siatka">' +
-            pole('Model *', '<div class="wiersz-modelu">' + wybierak('modele', 'p:' + i + ':modelLabel', p.modelLabel || '', { nowy: true, atr: 'data-model="1"', placeholder: 'zacznij pisać: producent, model albo kod', nowyTip: 'Dodaj nowy model do kartoteki' }) + (m ? przyciskKarty(m.modelId) : '') + '</div><small class="blad-tekst" data-podp="' + i + '"' + (C.norm(p.modelLabel) && !m ? '' : ' hidden') + '>Nie ma takiego modelu w kartotece. <a href="#" data-a="edytujModel" data-poz="' + i + '">Dodaj go</a></small>', 'szerokie') +
+            pole('Model *', '<div class="wiersz-modelu">' + wybierak('modele', 'p:' + i + ':modelLabel', p.modelLabel || '', { nowy: true, atr: 'data-model="1"', placeholder: 'zacznij pisać: producent, model albo kod', nowyTip: 'Dodaj nowe urządzenie do biblioteki' }) + (m ? przyciskKarty(m.modelId) : '') + '</div><small class="blad-tekst" data-podp="' + i + '"' + (C.norm(p.modelLabel) && !m ? '' : ' hidden') + '>Nie ma takiego urządzenia w bibliotece. <a href="#" data-a="edytujModel" data-poz="' + i + '">Dodaj je</a></small>', 'szerokie') +
             pole('Lokalizacja *', wybierak('lokalizacje', 'p:' + i + ':lok', p.lok || '', { opis: true, placeholder: 'np. Regał A, półka 2' }), '', 'lokalizacja') +
             (r === 'BO' ? pole('Kupione pod projekt', wybierak('projekty', 'p:' + i + ':projekt', p.projekt || '', { opis: true, placeholder: 'puste = wolny stan' }), '', 'podProjekt') : '') +
             szczeg +
@@ -1285,7 +1293,7 @@
           '<button class="ikonowy" data-a="usunPoz" data-i="' + i + '" data-tip="Usuń pozycję" aria-label="Usuń pozycję">' + ikona('x') + '</button>' +
         '</div>';
       }).join('');
-      pozycje += '<div class="przyciski-pozycji"><button class="przycisk" data-a="dodajPoz">' + ikona('plus') + 'Dodaj pozycję</button> <button class="przycisk tekstowy" data-a="edytujModel" data-poz="nowa">' + ikona('kart') + 'Nowy model w kartotece</button></div>';
+      pozycje += '<div class="przyciski-pozycji"><button class="przycisk" data-a="dodajPoz">' + ikona('plus') + 'Dodaj pozycję</button> <button class="przycisk tekstowy" data-a="edytujModel" data-poz="nowa">' + ikona('kart') + 'Nowe urządzenie w bibliotece</button></div>';
     } else if (r === 'WZ') {
       const zast = s.pozycje.some((p) => C.czyZastepcze(p.projektZakupu, s.projekt));
       naglowek = '<div class="siatka">' +
@@ -1473,10 +1481,10 @@
       tytul: esc(d.numer) + ' · ' + esc(C.RODZAJE[d.rodzaj].nazwa), tresc, przyciski, szeroki: true,
       przyOtwarciu: (f) => {
         f.addEventListener('click', async (e) => {
-          const k = e.target.closest('[data-a="karta"]');
+          const k = e.target.closest('[data-a="karta"], [data-a="stronaProduktu"]');
           if (k) {
             e.preventDefault();
-            return otworzKarte(k.dataset.m);
+            return k.dataset.a === 'karta' ? otworzKarte(k.dataset.m) : otworzStrone(k.dataset.m);
           }
           const a = e.target.closest('[data-otworz]');
           if (!a) return;
@@ -1592,12 +1600,13 @@
     setTimeout(() => window.print(), 60);
   }
 
-  // ------------------------------------------------------------ edycja kartotek
+  // ------------------------------------------------------------ biblioteka urządzeń
 
-  function linkSzukajKarty(producent, modelNazwa, pn) {
+  function linkSzukaj(producent, modelNazwa, pn, karta) {
     const q = [producent, modelNazwa, pn].map((x) => C.norm(x)).filter(Boolean).join(' ');
-    return 'https://www.google.com/search?q=' + encodeURIComponent(q + ' karta katalogowa datasheet pdf');
+    return 'https://www.google.com/search?q=' + encodeURIComponent(q + (karta ? ' datasheet filetype:pdf' : ''));
   }
+  const normUrl = (l) => { const t = String(l || '').trim(); return t && !/^https?:\/\//i.test(t) ? 'https://' + t : t; };
 
   async function edytujModel(id, poz, wstepne) {
     const p = C.podpowiedzi(app.st);
@@ -1608,12 +1617,12 @@
       const prod = p.producenci.find((x) => C.normKlucz(x) === C.normKlucz(slowa[0]));
       if (prod && slowa.length > 1) Object.assign(w0, { producent: prod, model: slowa.slice(1).join(' ') });
     }
-    const m = id ? app.st.modele.get(id) : Object.assign({ kategoria: '', producent: '', model: '', pn: '', ean: '', seryjny: true, jednostka: 'szt', jednostkaZakupu: '', przelicznik: '', stanMin: '', status: 'aktywny', link: '', kartaPlik: '' }, w0);
+    const m = id ? app.st.modele.get(id) : Object.assign({ kategoria: '', producent: '', model: '', pn: '', ean: '', seryjny: true, jednostka: 'szt', jednostkaZakupu: '', przelicznik: '', stanMin: '', status: 'aktywny', link: '', kartaLink: '', kartaPlik: '' }, w0);
     const uzyty = id && Array.from(app.st.dokumenty.values()).some((w) => (w.ev.dane.pozycje || []).some((p) => p.modelId === id));
     let nowyPlik = null;
     let usunPlik = false;
     const wynik = await dialog({
-      tytul: id ? 'Edycja modelu' : 'Nowy model w kartotece',
+      tytul: id ? 'Edycja: ' + esc(nazwaModelu(id)) : 'Nowe urządzenie w bibliotece',
       szeroki: true,
       tresc: '<h3 class="sekcja">Opis</h3><div class="siatka">' +
         pole('Kategoria *', '<select name="kategoria">' + C.KATEGORIE.map((k) => '<option ' + (k === m.kategoria ? 'selected' : '') + '>' + esc(k) + '</option>').join('') + '</select>') +
@@ -1623,7 +1632,7 @@
         pole('EAN', '<input name="ean" value="' + esc(m.ean) + '" inputmode="numeric">') +
         '</div>' +
         '<h3 class="sekcja">Ewidencja</h3><div class="siatka">' +
-        '<div class="pole szerokie"><span>Sposób ewidencji ' + pomoc('seryjny') + '</span><label class="przelacznik"><input type="checkbox" name="seryjny" ' + (m.seryjny ? 'checked' : '') + (uzyty ? ' disabled' : '') + '><span>śledź każdą sztukę po numerze seryjnym</span></label>' + (uzyty ? '<small class="szary">Model występuje już w dokumentach, więc sposobu ewidencji nie można zmienić.</small>' : '') + '</div>' +
+        '<div class="pole szerokie"><span>Sposób ewidencji ' + pomoc('seryjny') + '</span><label class="przelacznik"><input type="checkbox" name="seryjny" ' + (m.seryjny ? 'checked' : '') + (uzyty ? ' disabled' : '') + '><span>śledź każdą sztukę po numerze seryjnym</span></label>' + (uzyty ? '<small class="szary">Urządzenie występuje już w dokumentach, więc sposobu ewidencji nie można zmienić.</small>' : '') + '</div>' +
         pole('Jednostka', '<select name="jednostka"><option value="szt" ' + (m.jednostka !== 'm' ? 'selected' : '') + '>szt. (sztuki)</option><option value="m" ' + (m.jednostka === 'm' ? 'selected' : '') + '>m (metry)</option></select>', '', 'jednostka') +
         pole('Stan minimalny', '<input name="stanMin" value="' + esc(m.stanMin || '') + '" inputmode="decimal" placeholder="brak">', '', 'stanMin') +
         pole('Status', '<select name="status">' + [['aktywny', 'aktywny'], ['EOL', 'EOL – wycofany przez producenta'], ['wycofany', 'wycofany z naszej oferty']].map(([v, n]) => '<option value="' + v + '" ' + ((m.status || 'aktywny') === v ? 'selected' : '') + '>' + n + '</option>').join('') + '</select>', '', 'status') +
@@ -1631,18 +1640,24 @@
         '<div class="pole" data-pola-opak' + (m.seryjny || !m.jednostkaZakupu ? ' hidden' : '') + '><span>Nazwa opakowania</span><input name="jednostkaZakupu" value="' + esc(m.jednostkaZakupu || '') + '" placeholder="np. szpula, karton"></div>' +
         '<div class="pole" data-pola-opak' + (m.seryjny || !m.jednostkaZakupu ? ' hidden' : '') + '><span data-ile-w-opak>Ile ' + esc(jmw(m.jednostka)) + ' w opakowaniu</span><input name="przelicznik" value="' + esc(m.przelicznik || '') + '" inputmode="decimal" placeholder="np. 305"></div>' +
         '</div>' +
-        '<h3 class="sekcja">Karta katalogowa ' + pomoc('karta') + '</h3>' +
+        '<h3 class="sekcja">Strona produktu ' + pomoc('strona') + '</h3>' +
         '<div class="karta-katalogowa">' +
-          '<label class="pole szerokie"><span>Link do karty na stronie producenta</span><div class="wiersz-linku"><input name="link" value="' + esc(m.link || '') + '" placeholder="https://…" inputmode="url">' +
-          '<button type="button" class="przycisk" data-karta="szukaj">' + ikona('szuk') + 'Szukaj w internecie</button>' +
+          '<label class="pole szerokie"><span>Link do strony urządzenia u producenta</span><div class="wiersz-linku"><input name="link" value="' + esc(stronaProduktu(m)) + '" placeholder="https://…" inputmode="url">' +
+          '<button type="button" class="przycisk" data-karta="szukaj-strone">' + ikona('szuk') + 'Szukaj</button>' +
+          '<button type="button" class="przycisk" data-karta="otworz-strone">' + ikona('www') + 'Otwórz</button></div></label>' +
+        '</div>' +
+        '<h3 class="sekcja">Karta katalogowa (PDF) ' + pomoc('karta') + '</h3>' +
+        '<div class="karta-katalogowa">' +
+          '<label class="pole szerokie"><span>Link do pliku PDF</span><div class="wiersz-linku"><input name="kartaLink" value="' + esc(linkKarty(m)) + '" placeholder="https://…/datasheet.pdf" inputmode="url">' +
+          '<button type="button" class="przycisk" data-karta="szukaj">' + ikona('szuk') + 'Szukaj PDF</button>' +
           '<button type="button" class="przycisk" data-karta="otworz">' + ikona('link') + 'Otwórz</button></div></label>' +
-          '<div class="pole szerokie"><span>Plik PDF zapisany w folderze magazynu (działa także bez internetu)</span><div class="wiersz-linku">' +
+          '<div class="pole szerokie"><span>albo plik PDF zapisany w folderze magazynu (działa też bez internetu)</span><div class="wiersz-linku">' +
             '<span class="plik-karty" data-plik-nazwa>' + (m.kartaPlik ? ikona('karta') + esc(m.kartaPlik.split('/').pop()) : '<span class="szary">brak pliku</span>') + '</span>' +
             '<button type="button" class="przycisk" data-karta="plik">' + ikona('plus') + (m.kartaPlik ? 'Zmień plik' : 'Dołącz plik PDF') + '</button>' +
             (m.kartaPlik ? '<button type="button" class="przycisk tekstowy" data-karta="usun">Odłącz</button>' : '') +
             '<input type="file" accept="application/pdf,image/*" class="ukryty" data-plik-karty></div></div>' +
         '</div>',
-      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz model', klasa: 'glowny', submit: true }],
+      przyciski: [{ wartosc: 'anuluj', etykieta: 'Anuluj' }, { wartosc: 'ok', etykieta: 'Zapisz', klasa: 'glowny', submit: true }],
       przyOtwarciu: (f) => {
         const kat = f.kategoria;
         const ser = f.seryjny;
@@ -1675,18 +1690,21 @@
         wejsciePliku.addEventListener('change', () => {
           nowyPlik = wejsciePliku.files[0] || null;
           usunPlik = false;
-          if (nowyPlik) $('[data-plik-nazwa]', f).innerHTML = ikona('karta') + esc(nowyPlik.name) + ' <span class="szary">(zapisze się po kliknięciu „Zapisz model”)</span>';
+          if (nowyPlik) $('[data-plik-nazwa]', f).innerHTML = ikona('karta') + esc(nowyPlik.name) + ' <span class="szary">(zapisze się po kliknięciu „Zapisz”)</span>';
         });
         f.addEventListener('click', (e) => {
           const b = e.target.closest('[data-karta]');
           if (!b) return;
           e.preventDefault();
           const akcja = b.dataset.karta;
-          if (akcja === 'szukaj') window.open(linkSzukajKarty(f.producent.value, f.model.value, f.pn.value), '_blank', 'noopener');
-          if (akcja === 'otworz') {
-            const l = f.link.value.trim();
-            if (!l) return toast('Najpierw wklej link do karty', 'blad');
-            window.open(/^https?:\/\//i.test(l) ? l : 'https://' + l, '_blank', 'noopener');
+          if (akcja === 'szukaj-strone' || akcja === 'szukaj') {
+            if (!C.norm(f.model.value)) return toast('Najpierw wpisz producenta i model', 'blad');
+            window.open(linkSzukaj(f.producent.value, f.model.value, f.pn.value, akcja === 'szukaj'), '_blank', 'noopener');
+          }
+          if (akcja === 'otworz-strone' || akcja === 'otworz') {
+            const l = normUrl(akcja === 'otworz' ? f.kartaLink.value : f.link.value);
+            if (!l) return toast(akcja === 'otworz' ? 'Najpierw wklej link do PDF-a' : 'Najpierw wklej link do strony produktu', 'blad');
+            window.open(l, '_blank', 'noopener');
           }
           if (akcja === 'plik') wejsciePliku.click();
           if (akcja === 'usun') {
@@ -1697,23 +1715,24 @@
         });
       },
       przyWyslaniu: async (f) => {
-        let link = f.link.value.trim();
-        if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+        let link = normUrl(f.link.value);
+        let kartaLink = normUrl(f.kartaLink.value);
+        if (jestPdf(link) && !kartaLink) { kartaLink = link; link = ''; } // PDF wklejony jako strona produktu → to karta katalogowa
         const seryjny = uzyty ? !!m.seryjny : f.seryjny.checked;
         const dane = {
           modelId: id || 'm-' + C.noweId(8), kategoria: f.kategoria.value, producent: f.producent.value.trim(), model: f.model.value.trim(), pn: f.pn.value.trim(), ean: f.ean.value.trim(),
           seryjny, jednostka: seryjny ? 'szt' : uzyty ? m.jednostka || 'szt' : f.jednostka.value,
-          jednostkaZakupu: !seryjny && f.opak.checked ? f.jednostkaZakupu.value.trim() : '', przelicznik: !seryjny && f.opak.checked ? Number(f.przelicznik.value.replace(',', '.')) || '' : '', stanMin: Number(f.stanMin.value.replace(',', '.')) || '', status: f.status.value, link,
+          jednostkaZakupu: !seryjny && f.opak.checked ? f.jednostkaZakupu.value.trim() : '', przelicznik: !seryjny && f.opak.checked ? Number(f.przelicznik.value.replace(',', '.')) || '' : '', stanMin: Number(f.stanMin.value.replace(',', '.')) || '', status: f.status.value, link, kartaLink,
           kartaPlik: usunPlik ? '' : m.kartaPlik || '',
         };
-        if (!dane.model) throw new Error('Podaj nazwę modelu');
+        if (!dane.model) throw new Error('Podaj model albo nazwę');
         if (!seryjny && f.opak.checked) {
           if (!dane.jednostkaZakupu) throw new Error('Podaj nazwę opakowania (np. szpula) albo odznacz „kupujecie w opakowaniach”');
           if (!(dane.przelicznik > 0)) throw new Error('Podaj, ile ' + jmw(dane.jednostka) + ' jest w opakowaniu (np. 305 m w szpuli)');
           if (C.normKlucz(dane.jednostkaZakupu).replace(/\.$/, '') === C.normKlucz(jmw(dane.jednostka)).replace(/\.$/, '')) throw new Error('Opakowanie musi być czymś innym niż jednostka (np. szpula, karton)');
         }
         const dubel = Array.from(app.st.modele.values()).find((x) => x.modelId !== dane.modelId && C.normKlucz(x.producent + ' ' + x.model) === C.normKlucz(dane.producent + ' ' + dane.model));
-        if (dubel) throw new Error('Taki model już jest w kartotece');
+        if (dubel) throw new Error('To urządzenie już jest w bibliotece');
         if (nowyPlik) {
           const rozsz = (nowyPlik.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
           const nazwa = (dane.producent + '-' + dane.model).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || dane.modelId;
@@ -1725,7 +1744,7 @@
       },
     });
     if (!wynik) return;
-    toast('Zapisano model', 'ok');
+    toast('Zapisano w bibliotece urządzeń', 'ok');
     if (poz !== undefined && app.szkic) {
       const mm = app.st.modele.get(wynik);
       const pusta = app.szkic.pozycje.find((x) => !x.modelId && !C.norm(x.modelLabel));
@@ -1748,11 +1767,17 @@
         window.open(URL.createObjectURL(new Blob([plik], { type: typ })), '_blank');
         return;
       } catch (e) {
-        if (!m.link) return toast('Nie można otworzyć pliku karty: ' + e.message, 'blad');
+        if (!linkKarty(m)) return toast('Nie można otworzyć pliku karty: ' + e.message, 'blad');
       }
     }
-    if (m.link) window.open(m.link, '_blank', 'noopener');
-    else toast('Ten model nie ma karty katalogowej – dodaj ją w kartotece', 'blad');
+    if (linkKarty(m)) window.open(linkKarty(m), '_blank', 'noopener');
+    else toast('To urządzenie nie ma karty katalogowej – dodasz ją w bibliotece urządzeń', 'blad');
+  }
+
+  function otworzStrone(modelId) {
+    const m = app.st.modele.get(modelId);
+    if (stronaProduktu(m)) window.open(stronaProduktu(m), '_blank', 'noopener');
+    else toast('To urządzenie nie ma linku do strony produktu – dodasz go w bibliotece urządzeń', 'blad');
   }
 
   // ------------------------------------------------------------ dane firm z rejestru (Biała lista VAT)
@@ -2358,11 +2383,13 @@
     const wydane = C.wydaneNaProjekt(app.st, '').filter((x) => x.modelId === id);
     dialog({
       tytul: esc(nazwaModelu(id)), szeroki: true,
-      tresc: '<dl class="opis"><dt>Kategoria</dt><dd>' + esc(m.kategoria || '') + '</dd><dt>Kod producenta</dt><dd>' + esc(m.pn || '') + '</dd><dt>W magazynie</dt><dd><b>' + fmtIl(id, w.razem) + '</b> (wolne ' + fmtIl(id, w.wolne) + ', pod projekty ' + fmtIl(id, w.podProjekt) + ')</dd><dt>U klientów</dt><dd>' + fmtIl(id, w.wydane) + '</dd>' + '<dt>Karta katalogowa</dt><dd>' + (maKarte(m) ? (m.kartaPlik ? 'plik w folderze' : '') + (m.kartaPlik && m.link ? ' i ' : '') + (m.link ? 'link do strony producenta' : '') : '<span class="szary">brak – dodasz ją w edycji modelu</span>') + '</dd>' + '</dl>' +
+      tresc: '<dl class="opis"><dt>Kategoria</dt><dd>' + esc(m.kategoria || '') + '</dd><dt>Kod producenta</dt><dd>' + esc(m.pn || '') + '</dd><dt>W magazynie</dt><dd><b>' + fmtIl(id, w.razem) + '</b> (wolne ' + fmtIl(id, w.wolne) + ', pod projekty ' + fmtIl(id, w.podProjekt) + ')</dd><dt>U klientów</dt><dd>' + fmtIl(id, w.wydane) + '</dd>' + '<dt>Strona produktu</dt><dd>' + (stronaProduktu(m) ? esc(stronaProduktu(m).replace(/^https?:\/\//, '').slice(0, 60)) : '<span class="szary">brak</span>') + '</dd>' +
+        '<dt>Karta katalogowa</dt><dd>' + (maKarte(m) ? (m.kartaPlik ? 'plik PDF w folderze' : 'link do PDF-a') : '<span class="szary">brak</span>') + '</dd>' + '</dl>' +
         '<h3>W magazynie</h3>' + (miejsca.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Lokalizacja</th><th>Nr seryjny</th><th class="l">Ilość</th><th>Pod projekt</th></tr></thead><tbody>' + miejsca.map((x) => '<tr><td>' + esc(x.lok) + '</td><td class="mono">' + esc(x.sn) + '</td><td class="l">' + fmtIl(id, x.ilosc) + '</td><td>' + esc(x.projekt || '') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="szary">Brak</p>') +
         '<h3>U klientów</h3>' + (wydane.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Projekt</th><th>Klient</th><th>Nr seryjny</th><th class="l">Ilość</th></tr></thead><tbody>' + wydane.map((x) => '<tr><td>' + esc(x.projekt) + '</td><td>' + esc(x.klient) + '</td><td class="mono">' + esc(x.sn) + '</td><td class="l">' + fmtIl(id, x.ilosc) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="szary">Brak</p>'),
-      przyciski: (maKarte(m) ? [{ wartosc: 'karta', etykieta: ikona('karta') + 'Karta katalogowa' }] : []).concat([{ wartosc: 'edytuj', etykieta: 'Edytuj model' }, { wartosc: 'ok', etykieta: 'Zamknij', klasa: 'glowny' }]),
+      przyciski: (stronaProduktu(m) ? [{ wartosc: 'strona', etykieta: ikona('www') + 'Strona produktu' }] : []).concat(maKarte(m) ? [{ wartosc: 'karta', etykieta: ikona('karta') + 'Karta katalogowa' }] : []).concat([{ wartosc: 'edytuj', etykieta: 'Edytuj' }, { wartosc: 'ok', etykieta: 'Zamknij', klasa: 'glowny' }]),
     }).then((w) => {
+      if (w === 'strona') otworzStrone(id);
       if (w === 'karta') otworzKarte(id);
       if (w === 'edytuj') edytujModel(id);
     });
@@ -2573,6 +2600,7 @@
     },
     pokazDok(el) { pokazDokument(el.dataset.id); },
     karta(el) { otworzKarte(el.dataset.m); },
+    stronaProduktu(el) { otworzStrone(el.dataset.m); },
     idzRaport(el) {
       app.filtr.raport = el.dataset.r;
       AKCJE.idz({ dataset: { w: 'raporty' } });

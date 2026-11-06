@@ -216,14 +216,15 @@ with sync_playwright() as pw:
 
       # bilans otwarcia z nowymi modelami
       p.click('button:has-text("Rozpocznij bilans otwarcia")')
-      p.click('text=Nowy model w kartotece')
+      p.click('button:has-text("Nowe urządzenie w bibliotece")')
       p.select_option('#modal select[name=kategoria]', 'Wyświetlacze')
       p.fill('#modal input[name=producent]', 'LG')
       p.fill('#modal input[name=model]', '55UH5N')
       p.fill('#modal input[name=pn]', '55UH5N-E')
-      p.fill('#modal input[name=link]', 'www.lg.com/karta-55uh5n.pdf')
+      p.fill('#modal input[name=link]', 'www.lg.com/pl/monitory-55uh5n')
+      p.fill('#modal input[name=kartaLink]', 'www.lg.com/karta-55uh5n.pdf')
       p.screenshot(path=ZRZUTY / '09-nowy-model.png')
-      okno_przycisk(p, 'Zapisz model')
+      okno_przycisk(p, 'Zapisz')
       p.wait_for_timeout(100)
       # pierwsza (pusta) pozycja dodana na starcie BO – usuń ją, jeśli jest pusta
       pozycje = p.locator('.pozycja')
@@ -234,14 +235,15 @@ with sync_playwright() as pw:
       lok = p.locator('[data-p$=":lok"]').first
       lok.fill('Regał A')
       # materiał w metrach ze szpulą
-      p.click('text=Nowy model w kartotece')
+      p.click('button:has-text("Nowe urządzenie w bibliotece")')
       p.select_option('#modal select[name=kategoria]', 'Okablowanie')
       p.fill('#modal input[name=producent]', 'Belden')
       p.fill('#modal input[name=model]', 'Cat6A F/UTP')
       p.check('#modal input[name=opak]')
       p.fill('#modal input[name=jednostkaZakupu]', 'szpula')
       p.fill('#modal input[name=przelicznik]', '500')
-      okno_przycisk(p, 'Zapisz model')
+      p.fill('#modal input[name=link]', 'www.belden.com/datasheet-cat6a.pdf')  # PDF wklejony jako strona → zapisze się jako karta
+      okno_przycisk(p, 'Zapisz')
       p.wait_for_timeout(100)
       il = p.locator('[data-p$=":ilosc"]').last
       il.fill('2')
@@ -451,12 +453,22 @@ with sync_playwright() as pw:
       p.click('nav a[data-w=problemy]')
       assert p.locator('.alert.ok').count() == 1, p.inner_text('.zawartosc')
       p.click('nav a[data-w=kartoteka]')
-      assert p.locator('.karta-btn.z-tekstem').count() == 1, 'brak przycisku karty katalogowej'
+      p.wait_for_selector('h1:has-text("Biblioteka urządzeń")')
+      lg = p.locator('tr:has-text("55UH5N")')
+      assert lg.locator('.karta-btn:has-text("Strona produktu")').count() == 1, 'brak przycisku strony produktu'
+      assert lg.locator('.karta-btn:has-text("Karta katalogowa")').count() == 1, 'brak przycisku karty katalogowej'
+      belden = p.locator('tr:has-text("Cat6A F/UTP")')
+      assert belden.locator('.karta-btn:has-text("Karta katalogowa")').count() == 1 and belden.locator('.karta-btn:has-text("Strona produktu")').count() == 0
       ctx.route('https://www.lg.com/**', lambda r: r.fulfill(body='karta', content_type='text/plain'))
       with p.expect_popup() as okno:
-          p.locator('.karta-btn.z-tekstem').click()
-      assert okno.value.url.startswith('https://www.lg.com/'), okno.value.url
+          lg.locator('.karta-btn:has-text("Strona produktu")').click()
+      assert okno.value.url == 'https://www.lg.com/pl/monitory-55uh5n', okno.value.url
       okno.value.close()
+      with p.expect_popup() as okno:
+          lg.locator('.karta-btn:has-text("Karta katalogowa")').click()
+      assert okno.value.url == 'https://www.lg.com/karta-55uh5n.pdf', okno.value.url
+      okno.value.close()
+      p.screenshot(path=ZRZUTY / '19-biblioteka.png')
       zapytania = []
       def bialа_lista(route):
           zapytania.append(route.request.url)
