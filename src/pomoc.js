@@ -54,7 +54,7 @@
     karta: 'Link do karty katalogowej na stronie producenta albo plik PDF zapisany w folderze magazynu. Przycisk „Szukaj” otwiera wyszukiwarkę z nazwą modelu.',
     pin: 'PIN potwierdza, kto wystawił dokument. Każdy użytkownik ma własny PIN – nie podawaj go innym.',
     przenies: 'Zmienia miejsce sprzętu w magazynie (np. z regału na antresolę). Nie tworzy formularza do podpisu, ale zostaje zapisane w dzienniku.',
-    eksport: 'Zapisuje to, co widzisz na ekranie (z filtrami), jako plik Excel. Kopia trafia też do folderu „eksporty”.',
+    eksport: 'Zapisuje to, co widzisz na ekranie (z filtrami i w tej samej kolejności sortowania), jako plik Excel. Kopia trafia też do folderu „eksporty”.',
     odswiez: 'Wczytuje zmiany zapisane przez inne osoby. OneDrive potrzebuje od kilku sekund do kilku minut, żeby je przesłać.',
     skan: 'Po podpisaniu formularza zrób zdjęcie telefonem albo skan i dołącz go tutaj. Dokumenty bez skanu są na liście „Bez podpisu”.',
     anuluj: 'Dokumentu nie da się usunąć. Anulowanie oznacza go jako nieważny i cofa jego wpływ na stan. Wymaga powodu i PIN-u.',
@@ -126,7 +126,8 @@
     { id: 'raporty', tytul: 'Wyszukiwanie, raporty i Excel', html: `
       <ul>
         <li>Każda lista ma pole wyszukiwania – możesz wpisać kilka słów, np. „samsung 55”.</li>
-        <li>Przycisk <b>Eksport do Excela</b> zapisuje to, co widać na ekranie (z filtrami). Plik pobiera się na komputer, a kopia trafia do folderu „eksporty”.</li>
+        <li><b>Sortowanie:</b> kliknij nagłówek kolumny, np. „Data”, „Numer” albo „Ilość”. Pierwszy klik sortuje rosnąco (strzałka w górę), drugi malejąco, trzeci przywraca zwykłą kolejność. Daty i ilości sortują się jak liczby, a puste pola zawsze lądują na końcu. Aplikacja zapamiętuje wybór dla każdej tabeli.</li>
+        <li>Przycisk <b>Eksport do Excela</b> zapisuje to, co widać na ekranie (z filtrami i w tej samej kolejności). Plik pobiera się na komputer, a kopia trafia do folderu „eksporty”.</li>
         <li>Raporty: wydane na projekt, wydane do klienta, kupione pod projekt w magazynie, poniżej minimum, EOL na stanie, bez podpisu, historia urządzenia po numerze seryjnym.</li>
       </ul>` },
     { id: 'pomylki', tytul: 'Pomyłki i anulowanie', html: `

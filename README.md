@@ -32,6 +32,8 @@ W aplikacji jest wbudowana **pomoc**: znak **?** przy każdym widoku i polu (dym
 
 **Listy rozwijane** zastępują wpisywanie: projekt, dostawca, klient, model, lokalizacja, adres i osoba. Kliknij pole albo zacznij pisać, wybierz strzałkami i zatwierdź Enterem. Obok pól projektu, dostawcy, klienta i modelu jest przycisk **Nowy**.
 
+**Sortowanie**: kliknięcie nagłówka kolumny w każdej tabeli sortuje rosnąco, drugie malejąco, trzecie przywraca zwykłą kolejność. Daty i ilości sortują się jak liczby, wybór jest zapamiętywany, a eksport do Excela ma tę samą kolejność.
+
 Do tego są: stan magazynu (wolne / pod projekty / u klientów), lokalizacje z akcją „Przenieś”, urządzenia z historią po numerze seryjnym, raporty, kartoteka modeli, klienci, dziennik zmian, kontrola spójności i eksport każdej listy do Excela. Każdy dokument zapisuje się po potwierdzeniu PIN-em i drukuje jako formularz do podpisu z nagłówkiem firmy i kodem QR.
 
 ## Zasady przechowywania danych

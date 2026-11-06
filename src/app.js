@@ -335,13 +335,74 @@
 
   const tabele = {}; // id -> {nazwa, naglowki, wiersze}
 
+  // ------------------------------------------------------------ sortowanie tabel
+  // Klik w nagłówek kolumny: rosnąco → malejąco → kolejność domyślna. Wybór jest zapamiętywany
+  // w przeglądarce (osobno dla każdej tabeli, po nazwie kolumny), a eksport do Excela ma tę samą kolejność.
+
+  app.sortowanie = (() => {
+    try { return JSON.parse(localStorage.getItem('magazyn-sortowanie') || '{}') || {}; } catch (e) { return {}; }
+  })();
+  const kolator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
+  const ENCJE = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ' };
+
+  /** Tekst komórki bez znaczników HTML (to, co widać na ekranie). */
+  function tekstKomorki(html) {
+    return String(html == null ? '' : html).replace(/<[^>]*>/g, ' ').replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENCJE[m]).replace(/\s+/g, ' ').trim();
+  }
+
+  /** Klucz sortowania: data (dd.mm.rrrr [gg:mm]), liczba (także „312,5 m”, „4 pozycje”) albo tekst. Puste i „–” → null. */
+  function kluczSortowania(wartosc) {
+    if (typeof wartosc === 'number') return Number.isFinite(wartosc) ? { typ: 'n', v: wartosc, t: String(wartosc) } : null;
+    const t = String(wartosc == null ? '' : wartosc).trim();
+    if (/^[-–—]?$/.test(t)) return null;
+    let m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?/);
+    if (m) return { typ: 'd', v: ((Number(m[3]) * 100 + Number(m[2])) * 100 + Number(m[1])) * 10000 + Number(m[4] || 0) * 100 + Number(m[5] || 0), t };
+    m = t.match(/^(-?\d[\d\s\u00a0]*(?:[,.]\d+)?)(?:\s+\S.*)?$/);
+    if (m) return { typ: 'n', v: Number(m[1].replace(/[\s\u00a0]/g, '').replace(',', '.')), t };
+    return { typ: 't', v: t, t };
+  }
+
+  /** Zwraca wiersze w kolejności wybranej dla tabeli (albo bez zmian). */
+  function posortuj(id, naglowki, wiersze) {
+    const s = app.sortowanie[id];
+    const k = s ? naglowki.indexOf(s.kol) : -1;
+    if (k < 0 || wiersze.length < 2) return wiersze;
+    const klucze = wiersze.map((w) => kluczSortowania(w.sort && w.sort[k] !== undefined ? w.sort[k] : tekstKomorki(w.komorki[k])));
+    const typy = new Set(klucze.filter(Boolean).map((x) => x.typ));
+    const liczbowo = typy.size === 1 && !typy.has('t');
+    const kier = s.mal ? -1 : 1;
+    const kolejnosc = wiersze.map((w, i) => i).sort((a, b) => {
+      const x = klucze[a];
+      const y = klucze[b];
+      if (!x || !y) return x === y ? a - b : x ? -1 : 1; // puste zawsze na końcu
+      const wynik = liczbowo ? x.v - y.v : kolator.compare(x.t, y.t);
+      return wynik * kier || a - b;
+    });
+    return kolejnosc.map((i) => wiersze[i]);
+  }
+
+  const strzalkaSort = (kier) => '<svg class="strzalka-sort" viewBox="0 0 10 14" aria-hidden="true">' +
+    (kier !== 'mal' ? '<path d="M5 1 9 5.5H1z" class="' + (kier === 'ros' ? 'wl' : '') + '"/>' : '') +
+    (kier !== 'ros' ? '<path d="M5 13 1 8.5h8z" class="' + (kier === 'mal' ? 'wl' : '') + '"/>' : '') + '</svg>';
+
   function tabela(id, nazwa, naglowki, wiersze, opcje = {}) {
-    // wiersze: [{komorki:[html...], dane:[surowe do Excela], klasa, akcja}]
-    tabele[id] = { nazwa, naglowki: opcje.naglowkiXls || naglowki, wiersze: wiersze.map((w) => w.dane) };
+    // wiersze: [{komorki:[html...], dane:[surowe do Excela], sort?:[klucze], klasa, akcja, akcjeHtml}]
+    const posortowane = posortuj(id, naglowki, wiersze);
+    tabele[id] = { nazwa, naglowki: opcje.naglowkiXls || naglowki, wiersze: posortowane.map((w) => w.dane) };
     if (!wiersze.length) return '<div class="pusto">' + (opcje.pusto || 'Brak pozycji') + '</div>';
-    return '<div class="tabela-owijka"><table class="tabela"><thead><tr>' + naglowki.map((h, i) => '<th class="' + ((opcje.liczbowe || []).includes(i) ? 'l' : '') + '">' + esc(h) + '</th>').join('') + (opcje.akcje ? '<th></th>' : '') + '</tr></thead><tbody>' +
-      wiersze.map((w) => '<tr class="' + (w.klasa || '') + '"' + (w.akcja ? ' data-a="' + w.akcja + '" tabindex="0"' : '') + '>' + w.komorki.map((k, i) => '<td class="' + ((opcje.liczbowe || []).includes(i) ? 'l' : '') + '">' + k + '</td>').join('') + (opcje.akcje ? '<td class="akcje-wiersza">' + (w.akcjeHtml || '') + '</td>' : '') + '</tr>').join('') +
-      '</tbody></table></div>';
+    const liczbowe = opcje.liczbowe || [];
+    const s = app.sortowanie[id];
+    const pokazane = opcje.limit ? posortowane.slice(0, opcje.limit) : posortowane;
+    const th = naglowki.map((h, i) => {
+      const akt = !!s && s.kol === h;
+      const kl = liczbowe.includes(i) ? 'l' : '';
+      if (!h || (opcje.bezSortowania || []).includes(i)) return '<th class="' + kl + '">' + esc(h) + '</th>';
+      return '<th class="' + kl + '"' + (akt ? ' aria-sort="' + (s.mal ? 'descending' : 'ascending') + '"' : '') + '><button type="button" class="sortuj' + (akt ? ' aktywna' : '') + '" data-a="sortuj" data-t="' + esc(id) + '" data-k="' + esc(h) + '" aria-label="' + esc(h) + ': ' + (akt ? (s.mal ? 'sortowanie malejące – kliknij, żeby wrócić do domyślnej kolejności' : 'sortowanie rosnące – kliknij, żeby posortować malejąco') : 'kliknij, żeby posortować rosnąco') + '"><span>' + esc(h) + '</span>' + strzalkaSort(akt ? (s.mal ? 'mal' : 'ros') : '') + '</button></th>';
+    }).join('');
+    return '<div class="tabela-owijka' + (opcje.owijka ? ' ' + opcje.owijka : '') + '"><table class="tabela"><thead><tr>' + th + (opcje.akcje ? '<th></th>' : '') + '</tr></thead><tbody>' +
+      pokazane.map((w) => '<tr class="' + (w.klasa || '') + '"' + (w.akcja ? ' data-a="' + w.akcja + '" tabindex="0"' : '') + '>' + w.komorki.map((k, i) => '<td class="' + (liczbowe.includes(i) ? 'l' : '') + (opcje.klasyKolumn && opcje.klasyKolumn[i] ? ' ' + opcje.klasyKolumn[i] : '') + '">' + k + '</td>').join('') + (opcje.akcje ? '<td class="akcje-wiersza">' + (w.akcjeHtml || '') + '</td>' : '') + '</tr>').join('') +
+      '</tbody></table></div>' +
+      (pokazane.length < posortowane.length ? '<p class="szary maly">Pokazano ' + fmtL(pokazane.length) + ' z ' + fmtL(posortowane.length) + ' – zawęź wyszukiwanie.' + (opcje.eksportWszystkich ? ' Eksport do Excela zawiera wszystkie.' : '') + '</p>' : '');
   }
 
   const przyciskEksportu = (id) => '<button class="przycisk" data-a="eksport" data-t="' + id + '" data-tip="' + esc(P.TIPY.eksport) + '">' + ikona('xls') + 'Eksport do Excela</button>';
@@ -534,15 +595,16 @@
         dane: [m.kategoria || '', (m.producent ? m.producent + ' ' : '') + m.model, m.pn || '', w.wolne, w.podProjekt, w.razem, w.wydane, Number(m.stanMin) || null, jmw(m.jednostka), m.status || 'aktywny'],
       };
     });
-    tabele.stan = { nazwa: 'Stan magazynu', naglowki: ['Kategoria', 'Model', 'Kod producenta', 'Wolne', 'Pod projekty', 'Razem w magazynie', 'Wydane do klientów', 'Stan minimalny', 'Jednostka', 'Status'], wiersze: wiersze.map((w) => w.dane) };
+    const html = tabela('stan', 'Stan magazynu', ['Kategoria', 'Model', 'Kod producenta', 'Wolne', 'Pod projekty', 'Razem', 'U klientów', 'Min.'], wiersze, {
+      liczbowe: [3, 4, 5, 6, 7],
+      naglowkiXls: ['Kategoria', 'Model', 'Kod producenta', 'Wolne', 'Pod projekty', 'Razem w magazynie', 'Wydane do klientów', 'Stan minimalny', 'Jednostka', 'Status'],
+      pusto: app.st.modele.size ? 'Nic nie pasuje do filtra' : 'Kartoteka jest pusta. Dodaj modele w kartotece albo od razu w dokumencie przyjęcia.',
+    });
     return naglowekWidoku('Stan magazynu', 'Wolne + kupione pod projekty = razem w magazynie. Kliknij wiersz, aby zobaczyć szczegóły.', przyciskEksportu('stan'), 'stan') +
       '<div class="filtry">' + poleSzukaj('stan', 'Szukaj modelu, producenta, kodu…') +
         '<select data-filtr="stanKat"><option value="">Wszystkie kategorie</option>' + C.KATEGORIE.map((k) => '<option ' + (k === kat ? 'selected' : '') + '>' + esc(k) + '</option>').join('') + '</select>' +
         '<label class="przelacznik"><input type="checkbox" data-filtr="stanMin" ' + (tylkoMin ? 'checked' : '') + '> tylko poniżej minimum</label>' +
-      '</div>' +
-      (wiersze.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Kategoria</th><th>Model</th><th>Kod producenta</th><th class="l">Wolne</th><th class="l">Pod projekty</th><th class="l">Razem</th><th class="l">U klientów</th><th class="l">Min.</th></tr></thead><tbody>' +
-        wiersze.map((w) => '<tr class="' + w.klasa + '" data-a="' + w.akcja + '" tabindex="0">' + w.komorki.map((k, i) => '<td class="' + (i >= 3 ? 'l' : '') + '">' + k + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>'
-        : '<div class="pusto">' + (app.st.modele.size ? 'Nic nie pasuje do filtra' : 'Kartoteka jest pusta. Dodaj modele w kartotece albo od razu w dokumencie przyjęcia.') + '</div>');
+      '</div>' + html;
   };
 
   WIDOKI.lokalizacje = () => {
@@ -713,13 +775,16 @@
 
   WIDOKI.dziennik = () => {
     const lista = app.st.zdarzenia.slice().reverse().filter((ev) => pasuje('dz', C.opisZdarzenia(app.st, ev), osoba(ev.autor), ev.typ));
-    const html = tabela('dziennik', 'Dziennik zmian', ['Data i godzina', 'Kto', 'Rodzaj', 'Opis'], lista.slice(0, 500).map((ev) => ({
-      komorki: [fmtCzas(ev.ts), esc(osoba(ev.autor)), '<span class="znaczek">' + esc(ev.typ) + '</span>', esc(C.opisZdarzenia(app.st, ev))],
-      dane: [fmtCzas(ev.ts), osoba(ev.autor), ev.typ, C.opisZdarzenia(app.st, ev)],
-    })), { pusto: 'Dziennik jest pusty' });
-    if (tabele.dziennik) tabele.dziennik.wiersze = lista.map((ev) => [fmtCzas(ev.ts), osoba(ev.autor), ev.typ, C.opisZdarzenia(app.st, ev)]);
+    const html = tabela('dziennik', 'Dziennik zmian', ['Data i godzina', 'Kto', 'Rodzaj', 'Opis'], lista.map((ev) => {
+      const opis = C.opisZdarzenia(app.st, ev);
+      return {
+        komorki: [fmtCzas(ev.ts), esc(osoba(ev.autor)), '<span class="znaczek">' + esc(ev.typ) + '</span>', esc(opis)],
+        dane: [fmtCzas(ev.ts), osoba(ev.autor), ev.typ, opis],
+        sort: [ev.ts],
+      };
+    }), { pusto: 'Dziennik jest pusty', limit: 500, eksportWszystkich: true });
     return naglowekWidoku('Dziennik zmian', 'Każda operacja z autorem i godziną. Nic nie jest kasowane.', przyciskEksportu('dziennik'), 'dziennik') +
-      '<div class="filtry">' + poleSzukaj('dz', 'Szukaj w dzienniku…') + '</div>' + html + (lista.length > 500 ? '<p class="szary maly">Pokazano 500 najnowszych wpisów; eksport zawiera wszystkie.</p>' : '');
+      '<div class="filtry">' + poleSzukaj('dz', 'Szukaj w dzienniku…') + '</div>' + html;
   };
 
   WIDOKI.problemy = () => {
@@ -1222,12 +1287,17 @@
       .filter((w) => pasuje('wybor', nazwaModelu(w.modelId), model(w.modelId).pn, w.sn, w.lok, w.projekt, projNazwa(w.projekt)))
       .sort((a, b) => ranga(a) - ranga(b) || (nazwaModelu(a.modelId) + a.lok + a.sn).localeCompare(nazwaModelu(b.modelId) + b.lok + b.sn, 'pl'));
     return '<h3 class="odstep-gora">Dostępne w magazynie ' + pomoc('wyborZMagazynu') + '</h3><div class="filtry">' + poleSzukaj('wybor', 'Szukaj: model, kod, numer seryjny, lokalizacja…') + '</div>' +
-      (lista.length ? '<div class="tabela-owijka wysokosc"><table class="tabela"><thead><tr><th>Model</th><th>Nr seryjny</th><th>Lokalizacja</th><th>Kupione pod</th><th class="l">Dostępne</th><th></th></tr></thead><tbody>' +
-        lista.slice(0, 200).map((w) => {
-          const juz = wykorzystane.get(w.modelId + '|' + w.lok + '|' + (w.projekt || '')) || 0;
-          const zast = C.czyZastepcze(w.projekt, s.projekt);
-          return '<tr class="' + (zast ? 'inny-projekt' : '') + '"><td>' + esc(nazwaModelu(w.modelId)) + przyciskKarty(w.modelId) + '</td><td class="mono">' + esc(w.sn) + '</td><td>' + esc(w.lok) + '</td><td>' + (w.projekt ? znaczekProj(w.projekt, zast ? 'brak' : 'projekt') : '<span class="szary">wolny stan</span>') + '</td><td class="l">' + fmtIl(w.modelId, w.ilosc - juz) + '</td><td class="akcje-wiersza"><button class="przycisk maly ' + (zast ? 'czerwony' : '') + '" data-a="dodajZMagazynu" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-lok="' + esc(w.lok) + '" data-p="' + esc(w.projekt) + '" data-il="' + w.ilosc + '" ' + (w.ilosc - juz <= 0 ? 'disabled' : '') + '>Dodaj</button></td></tr>';
-        }).join('') + '</tbody></table></div>' : '<div class="pusto">Brak sprzętu pasującego do wyszukiwania</div>');
+      tabela('wybor', 'Dostępne w magazynie', ['Model', 'Nr seryjny', 'Lokalizacja', 'Kupione pod', 'Dostępne'], lista.map((w) => {
+        const juz = wykorzystane.get(w.modelId + '|' + w.lok + '|' + (w.projekt || '')) || 0;
+        const zast = C.czyZastepcze(w.projekt, s.projekt);
+        return {
+          klasa: zast ? 'inny-projekt' : '',
+          komorki: [esc(nazwaModelu(w.modelId)) + przyciskKarty(w.modelId), esc(w.sn), esc(w.lok), w.projekt ? znaczekProj(w.projekt, zast ? 'brak' : 'projekt') : '<span class="szary">wolny stan</span>', fmtIl(w.modelId, w.ilosc - juz)],
+          sort: [undefined, undefined, undefined, w.projekt ? projTekst(w.projekt) : ''],
+          dane: [nazwaModelu(w.modelId), w.sn, w.lok, w.projekt || '', w.ilosc - juz],
+          akcjeHtml: '<button class="przycisk maly ' + (zast ? 'czerwony' : '') + '" data-a="dodajZMagazynu" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-lok="' + esc(w.lok) + '" data-p="' + esc(w.projekt) + '" data-il="' + w.ilosc + '" ' + (w.ilosc - juz <= 0 ? 'disabled' : '') + '>Dodaj</button>',
+        };
+      }), { akcje: true, liczbowe: [4], klasyKolumn: { 1: 'mono' }, owijka: 'wysokosc', limit: 200, pusto: 'Brak sprzętu pasującego do wyszukiwania' });
   }
 
   function wyborZwrotu(s) {
@@ -1235,9 +1305,11 @@
     const wybrane = new Set(s.pozycje.map((p) => p.modelId + '|' + (p.sn || '')));
     const lista = C.wydaneNaProjekt(app.st, s.projekt).filter((w) => !wybrane.has(w.modelId + '|' + (w.sn || '')));
     return '<h3 class="odstep-gora">Wydane na projekt ' + esc(projTekst(s.projekt)) + '</h3>' +
-      (lista.length ? '<div class="tabela-owijka"><table class="tabela"><thead><tr><th>Model</th><th>Nr seryjny</th><th>Klient</th><th class="l">Wydano</th><th></th></tr></thead><tbody>' +
-        lista.map((w) => '<tr><td>' + esc(nazwaModelu(w.modelId)) + '</td><td class="mono">' + esc(w.sn) + '</td><td>' + esc(w.klient) + '</td><td class="l">' + fmtIl(w.modelId, w.ilosc) + '</td><td class="akcje-wiersza"><button class="przycisk maly" data-a="dodajZwrot" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-il="' + w.ilosc + '">Dodaj</button></td></tr>').join('') +
-        '</tbody></table></div>' : '<div class="pusto">Nic nie zostało wydane na ten projekt (albo już wróciło)</div>');
+      tabela('zwrot', 'Wydane na projekt', ['Model', 'Nr seryjny', 'Klient', 'Wydano'], lista.map((w) => ({
+        komorki: [esc(nazwaModelu(w.modelId)), esc(w.sn), esc(w.klient), fmtIl(w.modelId, w.ilosc)],
+        dane: [nazwaModelu(w.modelId), w.sn, w.klient, w.ilosc],
+        akcjeHtml: '<button class="przycisk maly" data-a="dodajZwrot" data-m="' + esc(w.modelId) + '" data-sn="' + esc(w.sn) + '" data-il="' + w.ilosc + '">Dodaj</button>',
+      })), { akcje: true, liczbowe: [3], klasyKolumn: { 1: 'mono' }, pusto: 'Nic nie zostało wydane na ten projekt (albo już wróciło)' });
   }
 
   function pozycjeDoZapisu(s) {
@@ -2228,6 +2300,18 @@
     edytujModel(el) { edytujModel(el.dataset.id || null, el.dataset.poz); },
     edytujKlienta(el) { edytujKlienta(el.dataset.id || null); },
     edytujDostawce(el) { edytujDostawce(el.dataset.id || null); },
+    sortuj(el) {
+      const id = el.dataset.t;
+      const kol = el.dataset.k;
+      const s = app.sortowanie[id];
+      if (!s || s.kol !== kol) app.sortowanie[id] = { kol, mal: false };
+      else if (!s.mal) s.mal = true;
+      else delete app.sortowanie[id];
+      try { localStorage.setItem('magazyn-sortowanie', JSON.stringify(app.sortowanie)); } catch (e) { /* tryb prywatny – bez zapamiętywania */ }
+      render();
+      const b = $$('button.sortuj').find((x) => x.dataset.t === id && x.dataset.k === kol);
+      if (b) b.focus({ preventScroll: true });
+    },
     edytujProjekt(el) { edytujProjekt(el.dataset.id || null, el.dataset.numer ? { numer: el.dataset.numer } : null); },
     pokazProjekt(el) { pokazProjekt(el.dataset.numer); },
     async dodajDoWybieraka(el) {

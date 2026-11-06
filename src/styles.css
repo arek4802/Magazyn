@@ -186,6 +186,17 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .tabela-owijka.wysokosc { max-height: 440px; overflow-y: auto; }
 .tabela { width: 100%; border-collapse: collapse; }
 .tabela th { position: sticky; top: 0; background: #f8f9fc; text-align: left; font-size: 12px; font-weight: 600; color: var(--szary); padding: 9px 12px; border-bottom: 1px solid var(--linia); white-space: nowrap; z-index: 1; }
+.tabela th:has(> .sortuj) { padding: 0; }
+.tabela th .sortuj { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; padding: 9px 12px; cursor: pointer; font: inherit; color: inherit; white-space: nowrap; }
+.tabela th.l .sortuj { justify-content: flex-end; }
+.tabela th .sortuj:hover { color: var(--marka); background: #eef0f8; }
+.tabela th .sortuj:focus-visible { outline: 2px solid var(--marka); outline-offset: -2px; }
+.tabela th .sortuj.aktywna { color: var(--marka); }
+.strzalka-sort { width: 8px; height: 12px; flex: none; fill: currentColor; opacity: 0; transition: opacity .12s; }
+.strzalka-sort path { opacity: .45; }
+.strzalka-sort path.wl { opacity: 1; }
+.tabela th .sortuj:hover .strzalka-sort, .tabela th .sortuj:focus-visible .strzalka-sort { opacity: .7; }
+.tabela th .sortuj.aktywna .strzalka-sort { opacity: 1; }
 .tabela td { padding: 9px 12px; border-bottom: 1px solid #eef0f5; vertical-align: middle; }
 .tabela tr:last-child td { border-bottom: 0; }
 .tabela .l { text-align: right; white-space: nowrap; }

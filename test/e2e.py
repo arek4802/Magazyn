@@ -120,6 +120,26 @@ with sync_playwright() as pw:
       assert p.locator('.zawartosc tbody tr').count() == 2, p.inner_text('.zawartosc')
       p.fill('[data-filtr=dok]', '')
       p.wait_for_timeout(400)
+      # sortowanie po kliknięciu w nagłówek: rosnąco → malejąco → domyślnie, zapamiętane po przeładowaniu
+      kol = lambda n: p.eval_on_selector_all('.zawartosc table.tabela tbody tr', f'rs => rs.map(r => r.cells[{n}].innerText.trim())')
+      domyslnie = kol(0)
+      p.click('th button:has-text("Data")')
+      daty = kol(2)
+      assert [d[6:] + d[3:5] + d[:2] for d in daty] == sorted(d[6:] + d[3:5] + d[:2] for d in daty), daty
+      assert p.get_attribute('th[aria-sort]', 'aria-sort') == 'ascending'
+      p.click('th button:has-text("Data")')
+      assert kol(2) == daty[::-1]
+      p.click('nav a[data-w=stan]')
+      p.click('th button:has-text("Wolne")')
+      wolne = [float(x.split()[0].replace(',', '.')) for x in kol(3)]
+      assert wolne == sorted(wolne), wolne
+      p.click('nav a[data-w=dokumenty]')
+      assert kol(2) == daty[::-1], 'sortowanie powinno zostać zapamiętane'
+      p.click('th button:has-text("Data")')
+      assert kol(0) == domyslnie and p.locator('th[aria-sort]').count() == 0
+      p.click('nav a[data-w=stan]')
+      p.click('th button:has-text("Wolne")')
+      p.click('th button:has-text("Wolne")')
       p.click('nav a[data-w=projekty]')
       assert p.locator('text=Hotel Gamma').count() == 0, 'zakończony projekt powinien być schowany'
       p.locator('tr:has-text("P-2026-014")').click()
